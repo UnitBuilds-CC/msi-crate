@@ -1,0 +1,22 @@
+[package]
+name = "velocity-msi"
+version = "0.1.0"
+edition = "2021"
+authors = ["Velocity Team"]
+description = "Clean-room MSI package generator for Velocity Installer"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+# Windows-1252 encoding
+encoding_rs = "0.8"
+
+# Timestamps
+chrono = "0.4"
+
+# Error handling
+thiserror = "1.0"
+
+[dev-dependencies]
+tempfile = "3.10"
+cfb = "0.14"
+uuid = "1.0"
