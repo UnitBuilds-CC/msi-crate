@@ -1,7 +1,8 @@
-//! velocity-msi - Clean-room MSI package generator
+//! velocity-msi - MSI package generator
 //!
-//! Creates Windows Installer (MSI) packages with a from-scratch OLE V4 writer.
-//! No dependency on cfb or rust-msi crates.
+//! Creates Windows Installer (MSI) packages using a custom OLE V4 compound
+//! file writer and custom MSI table serialization.  No external dependencies
+//! for the OLE layer — the entire compound file is built from scratch.
 
 mod error;
 pub mod ole;
@@ -67,11 +68,31 @@ impl MsiBuilder {
                 s.created = Some(now);
                 s.modified = Some(now);
                 s.creating_app = Some("Velocity Installer".to_string());
+                // Generate a pseudo-UUID for the Revision Number.
+                // msiexec REQUIRES this property (PID 9) to open the MSI.
+                s.rev_number = Some(Self::generate_uuid(&now));
                 s
             },
             long_string_refs: false,
             extra_streams: Vec::new(),
         }
+    }
+
+    /// Generate a UUID string from a timestamp (pseudo-random, but unique enough).
+    fn generate_uuid(now: &chrono::DateTime<chrono::Utc>) -> String {
+        let ts = now.timestamp();
+        let ns = now.timestamp_subsec_nanos();
+        // Mix bits to get reasonable distribution
+        let a = (ts as u32).wrapping_mul(0x5bd1e995).wrapping_add(ns);
+        let b = (ts as u32).wrapping_mul(0x1b873593) ^ ns;
+        let c = (ts as u16).wrapping_mul(0x85eb) ^ (ns >> 16) as u16;
+        let d = ((ts >> 16) as u16).wrapping_add(ns as u16);
+        format!(
+            "{{{:08X}-{:04X}-{:04X}-{:04X}-{:04X}{:08X}}}",
+            a, b >> 16, (b & 0xFFFF) | 0x4000, // version 4
+            (c & 0x3FFF) | 0x8000, // variant 1
+            d, ts as u32
+        )
     }
 
     /// Set the product title in SummaryInformation.
@@ -137,11 +158,11 @@ impl MsiBuilder {
         self.extra_streams.push(ole::OleStream { name, data });
     }
 
-    /// Build the MSI package and return the complete OLE V4 compound file bytes.
+    /// Build the MSI package and return the complete OLE compound file bytes.
     ///
     /// This creates system tables (_Tables, _Columns, _Validation), serializes
     /// all table data, builds the string pool, and assembles everything into
-    /// an OLE V4 compound file.
+    /// an OLE V4 compound file using our custom OLE writer.
     pub fn build(&mut self) -> Result<Vec<u8>> {
         // Create system tables (interns all system strings)
         let mut all_tables = self.create_system_tables()?;
@@ -151,14 +172,14 @@ impl MsiBuilder {
             all_tables.insert(name.clone(), table.clone());
         }
 
-        // Collect all OLE streams
-        let mut streams: Vec<ole::OleStream> = Vec::new();
+        // Collect all streams
+        let mut ole_streams: Vec<ole::OleStream> = Vec::new();
 
         // Table streams (ALL tables get TABLE_PREFIX per MSI spec)
         for (name, table) in &all_tables {
             let stream_name = encode_stream_name(name, true);
             let data = table.serialize(&self.string_pool)?;
-            streams.push(ole::OleStream {
+            ole_streams.push(ole::OleStream {
                 name: stream_name,
                 data,
             });
@@ -166,29 +187,32 @@ impl MsiBuilder {
 
         // Summary Information stream
         let summary_data = self.summary.serialize()?;
-        streams.push(ole::OleStream {
+        ole_streams.push(ole::OleStream {
             name: "\u{0005}SummaryInformation".to_string(),
             data: summary_data,
         });
 
         // String pool streams
         let (pool_name, pool_data, data_name, data_bytes) = self.build_string_pool()?;
-        streams.push(ole::OleStream {
+        ole_streams.push(ole::OleStream {
             name: pool_name,
             data: pool_data,
         });
-        streams.push(ole::OleStream {
+        ole_streams.push(ole::OleStream {
             name: data_name,
             data: data_bytes,
         });
 
         // Extra streams (cabinets, etc.)
         for stream in &self.extra_streams {
-            streams.push(stream.clone());
+            ole_streams.push(ole::OleStream {
+                name: stream.name.clone(),
+                data: stream.data.clone(),
+            });
         }
 
-        // Build the OLE V4 compound file
-        Ok(ole::build_ole_file(&streams))
+        // Build the OLE compound file using our custom OLE V4 writer
+        Ok(ole::build_ole_file(&ole_streams))
     }
 
     /// Create the system tables (_Tables, _Columns, _Validation)
@@ -438,7 +462,7 @@ impl MsiBuilder {
 ///
 /// `is_table=true`: system metadata tables get TABLE_PREFIX (\u{4840})
 /// `is_table=false`: user tables and internal streams (no prefix)
-pub(crate) fn encode_stream_name(name: &str, is_table: bool) -> String {
+pub fn encode_stream_name(name: &str, is_table: bool) -> String {
     let mut output = String::new();
     if is_table {
         output.push('\u{4840}');

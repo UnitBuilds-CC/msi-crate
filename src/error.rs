@@ -34,4 +34,7 @@ pub enum MsiError {
 
     #[error("Encoding error: {0}")]
     EncodingError(String),
+
+    #[error("CFB error: {0}")]
+    CfbError(String),
 }

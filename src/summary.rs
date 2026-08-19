@@ -29,6 +29,7 @@ const PID_AUTHOR: u32 = 4;
 const PID_KEYWORDS: u32 = 5;
 const PID_COMMENTS: u32 = 6;
 const PID_TEMPLATE: u32 = 7;
+const PID_REV_NUMBER: u32 = 9;
 const PID_CREATE_TIME: u32 = 12;
 const PID_LAST_SAVE_TIME: u32 = 13;
 const PID_WORD_COUNT: u32 = 15;
@@ -49,6 +50,9 @@ pub struct SummaryInfo {
     pub comments: Option<String>,
     /// Template: "arch;language" e.g. "x64;1033"
     pub template: Option<String>,
+    /// Revision number (UUID/GUID for the MSI package, e.g. "{...}")
+    /// This is REQUIRED for msiexec to open the package.
+    pub rev_number: Option<String>,
     pub created: Option<DateTime<Utc>>,
     pub modified: Option<DateTime<Utc>>,
     /// Code page (65001 for UTF-8)
@@ -85,6 +89,7 @@ impl SummaryInfo {
             keywords: None,
             comments: None,
             template: None,
+            rev_number: None,
             created: None,
             modified: None,
             codepage: 1252, // Windows-1252 (standard MSI codepage)
@@ -134,6 +139,10 @@ impl SummaryInfo {
         }
         if let Some(ref s) = self.template {
             props.push(Self::lpstr_prop(PID_TEMPLATE, s)?);
+        }
+        // PID 9: Revision Number (UUID) - REQUIRED for msiexec to open the MSI
+        if let Some(ref s) = self.rev_number {
+            props.push(Self::lpstr_prop(PID_REV_NUMBER, s)?);
         }
         if let Some(ref dt) = self.created {
             props.push(Self::filetime_prop(PID_CREATE_TIME, dt));
@@ -300,15 +309,16 @@ mod tests {
         si.comments = Some("Test Comments".to_string());
         si.template = Some("x64;1033".to_string());
         si.creating_app = Some("Velocity Installer".to_string());
+        si.rev_number = Some("{12345678-1234-1234-1234-123456789012}".to_string());
         si.created = Some(chrono::Utc::now());
         si.modified = Some(chrono::Utc::now());
 
         let data = si.serialize().unwrap();
 
         // Should have: codepage + title + subject + author + comments + template
-        //              + created + modified + word_count + creating_app = 10 props
+        //              + rev_number + created + modified + word_count + creating_app = 11 props
         let prop_count = read_u32(&data, 52);
-        assert_eq!(prop_count, 10, "Should have 10 properties");
+        assert_eq!(prop_count, 11, "Should have 11 properties");
 
         // Total size should be reasonable
         assert!(data.len() > 200, "Full property set should be > 200 bytes");
