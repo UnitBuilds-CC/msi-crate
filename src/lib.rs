@@ -232,7 +232,7 @@ impl MsiBuilder {
         }
         system_tables.insert("_Columns".to_string(), columns_table);
 
-        // _Validation - validation rules for all user table columns
+        // _Validation - validation rules for all table columns (including system tables)
         let mut validation_table = Table::new(
             "_Validation",
             vec![
@@ -249,6 +249,122 @@ impl MsiBuilder {
             ],
             self.long_string_refs,
         );
+        
+        // Add validation entries for system tables
+        // _Tables table
+        self.string_pool.intern("_Tables");
+        self.string_pool.intern("Name");
+        self.string_pool.intern("N");
+        validation_table.add_row(vec![
+            Value::Str("_Tables".to_string()),
+            Value::Str("Name".to_string()),
+            Value::Str("N".to_string()),
+            Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null,
+        ])?;
+        
+        // _Columns table
+        self.string_pool.intern("_Columns");
+        self.string_pool.intern("Table");
+        self.string_pool.intern("Number");
+        self.string_pool.intern("Type");
+        validation_table.add_row(vec![
+            Value::Str("_Columns".to_string()),
+            Value::Str("Table".to_string()),
+            Value::Str("N".to_string()),
+            Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null,
+        ])?;
+        validation_table.add_row(vec![
+            Value::Str("_Columns".to_string()),
+            Value::Str("Number".to_string()),
+            Value::Str("N".to_string()),
+            Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null,
+        ])?;
+        validation_table.add_row(vec![
+            Value::Str("_Columns".to_string()),
+            Value::Str("Name".to_string()),
+            Value::Str("N".to_string()),
+            Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null,
+        ])?;
+        validation_table.add_row(vec![
+            Value::Str("_Columns".to_string()),
+            Value::Str("Type".to_string()),
+            Value::Str("N".to_string()),
+            Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null,
+        ])?;
+        
+        // _Validation table (10 columns)
+        self.string_pool.intern("_Validation");
+        self.string_pool.intern("Column");
+        self.string_pool.intern("Nullable");
+        self.string_pool.intern("Description");
+        self.string_pool.intern("MinValue");
+        self.string_pool.intern("MaxValue");
+        self.string_pool.intern("KeyTable");
+        self.string_pool.intern("KeyColumn");
+        self.string_pool.intern("Category");
+        self.string_pool.intern("Set");
+        validation_table.add_row(vec![
+            Value::Str("_Validation".to_string()),
+            Value::Str("Table".to_string()),
+            Value::Str("N".to_string()),
+            Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null,
+        ])?;
+        validation_table.add_row(vec![
+            Value::Str("_Validation".to_string()),
+            Value::Str("Column".to_string()),
+            Value::Str("N".to_string()),
+            Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null,
+        ])?;
+        validation_table.add_row(vec![
+            Value::Str("_Validation".to_string()),
+            Value::Str("Nullable".to_string()),
+            Value::Str("N".to_string()),
+            Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null,
+        ])?;
+        validation_table.add_row(vec![
+            Value::Str("_Validation".to_string()),
+            Value::Str("MinValue".to_string()),
+            Value::Str("Y".to_string()),
+            Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null,
+        ])?;
+        validation_table.add_row(vec![
+            Value::Str("_Validation".to_string()),
+            Value::Str("MaxValue".to_string()),
+            Value::Str("Y".to_string()),
+            Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null,
+        ])?;
+        validation_table.add_row(vec![
+            Value::Str("_Validation".to_string()),
+            Value::Str("KeyTable".to_string()),
+            Value::Str("Y".to_string()),
+            Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null,
+        ])?;
+        validation_table.add_row(vec![
+            Value::Str("_Validation".to_string()),
+            Value::Str("KeyColumn".to_string()),
+            Value::Str("Y".to_string()),
+            Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null,
+        ])?;
+        validation_table.add_row(vec![
+            Value::Str("_Validation".to_string()),
+            Value::Str("Category".to_string()),
+            Value::Str("Y".to_string()),
+            Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null,
+        ])?;
+        validation_table.add_row(vec![
+            Value::Str("_Validation".to_string()),
+            Value::Str("Set".to_string()),
+            Value::Str("Y".to_string()),
+            Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null,
+        ])?;
+        validation_table.add_row(vec![
+            Value::Str("_Validation".to_string()),
+            Value::Str("Description".to_string()),
+            Value::Str("Y".to_string()),
+            Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null,
+        ])?;
+        
+        // Add validation entries for user tables
         for (table_name, table) in &self.tables {
             for col in &table.columns {
                 self.string_pool.intern(table_name);
@@ -408,8 +524,10 @@ mod tests {
     fn test_encode_stream_name() {
         let tables_enc = encode_stream_name("_Tables", true);
         let cols_enc = encode_stream_name("_Columns", true);
+        let val_enc = encode_stream_name("_Validation", true);
         eprintln!("_Tables encoded: {:?} ({} chars)", tables_enc, tables_enc.chars().count());
         eprintln!("_Columns encoded: {:?} ({} chars)", cols_enc, cols_enc.chars().count());
+        eprintln!("_Validation encoded: {:?} ({} chars)", val_enc, val_enc.chars().count());
         assert_eq!(
             encode_stream_name("_Columns", true),
             "\u{4840}\u{3b3f}\u{43f2}\u{4438}\u{45b1}"
