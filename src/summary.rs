@@ -16,7 +16,6 @@ use chrono::{DateTime, Utc};
 use std::io::Write;
 
 // OLE Property Set VT_* type codes
-const VT_I2: u32 = 2;
 const VT_I4: u32 = 3;
 const VT_LPSTR: u32 = 30;
 const VT_FILETIME: u32 = 64;
@@ -87,7 +86,7 @@ impl SummaryInfo {
             template: None,
             created: None,
             modified: None,
-            codepage: 65001, // UTF-8
+            codepage: 1252, // Windows-1252 (standard MSI codepage)
             word_count: 2,
             creating_app: None,
         }
@@ -259,7 +258,7 @@ mod tests {
     #[test]
     fn test_default_values() {
         let si = SummaryInfo::new();
-        assert_eq!(si.codepage, 65001);
+        assert_eq!(si.codepage, 1252);
         assert_eq!(si.word_count, 2);
         assert!(si.title.is_none());
         assert!(si.author.is_none());

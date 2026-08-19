@@ -527,20 +527,20 @@ pub fn validate_msi_semantics(data: &[u8]) -> Result<MsiSemanticReport> {
     if let Some(columns_entry) = stream_map.get(&columns_encoded) {
         let columns_data =
             read_stream_by_entry(data, &header, &fat, columns_entry, root_entry);
-        // _Columns has 4 columns: Table(string), Number(int16), Name(string), Type(int32)
+        // _Columns has 4 columns: Table(string), Number(int16), Name(string), Type(int16)
         // Column-major: [all Table values] [all Number values] [all Name values] [all Type values]
         // We need to figure out the row count first
         if columns_data.len() >= 2 {
             // Calculate row count: total bytes / bytes per row
-            // Each row: 2 (Table) + 2 (Number) + 2 (Name) + 4 (Type) = 10 bytes (short refs)
-            let bytes_per_row = 2 + 2 + 2 + 4; // short string refs
+            // Each row: 2 (Table) + 2 (Number) + 2 (Name) + 2 (Type) = 8 bytes (short refs)
+            let bytes_per_row = 2 + 2 + 2 + 2; // short string refs, int16 Type
             let row_count = columns_data.len() / bytes_per_row;
 
             if row_count > 0 {
                 let table_col_size = row_count * 2; // string refs are 2 bytes
                 let number_col_size = row_count * 2; // int16
                 let name_col_size = row_count * 2; // string refs
-                let _type_col_size = row_count * 4; // int32
+                let _type_col_size = row_count * 2; // int16
 
                 let table_off = 0;
                 let number_off = table_off + table_col_size;
@@ -560,9 +560,9 @@ pub fn validate_msi_semantics(data: &[u8]) -> Result<MsiSemanticReport> {
                         &columns_data,
                         name_off + i * 2,
                     ) as u32;
-                    let bitfield = read_u32(
+                    let bitfield = read_u16(
                         &columns_data,
-                        type_off + i * 4,
+                        type_off + i * 2,
                     ) as i32;
 
                     let table_name = string_map
@@ -580,13 +580,12 @@ pub fn validate_msi_semantics(data: &[u8]) -> Result<MsiSemanticReport> {
         }
     }
 
-    // Check that each user table has a corresponding stream
-    // We need to check both system-encoded (with prefix) and user-encoded (without prefix) streams.
-    // For user tables, re-encode each table name and check if the stream exists.
+    // Check that each user table has a corresponding stream.
+    // Per MSI spec, ALL table streams (including user tables) use the TABLE_PREFIX.
     let table_streams_found: Vec<String> = user_tables
         .iter()
         .filter(|t| {
-            let encoded = crate::encode_stream_name(t, false);
+            let encoded = crate::encode_stream_name(t, true);
             stream_map.contains_key(&encoded)
         })
         .cloned()

@@ -154,10 +154,9 @@ impl MsiBuilder {
         // Collect all OLE streams
         let mut streams: Vec<ole::OleStream> = Vec::new();
 
-        // Table streams (all '_' prefixed names get TABLE_PREFIX)
+        // Table streams (ALL tables get TABLE_PREFIX per MSI spec)
         for (name, table) in &all_tables {
-            let is_system = name.starts_with('_');
-            let stream_name = encode_stream_name(name, is_system);
+            let stream_name = encode_stream_name(name, true);
             let data = table.serialize(&self.string_pool)?;
             streams.push(ole::OleStream {
                 name: stream_name,
@@ -215,7 +214,7 @@ impl MsiBuilder {
                 Column::build("Table").string(64).primary_key().build(),
                 Column::build("Number").int16().primary_key().build(),
                 Column::build("Name").string(64).primary_key().build(),
-                Column::build("Type").int32().build(),
+                Column::build("Type").int16().build(),
             ],
             self.long_string_refs,
         );
@@ -246,6 +245,7 @@ impl MsiBuilder {
                 Column::build("KeyColumn").int16().nullable().build(),
                 Column::build("Category").string(32).nullable().build(),
                 Column::build("Set").string(255).nullable().build(),
+                Column::build("Description").string(255).nullable().build(),
             ],
             self.long_string_refs,
         );
@@ -265,6 +265,7 @@ impl MsiBuilder {
                     Value::Null,
                     Value::Null,
                     Value::Null,
+                    Value::Null,
                 ])?;
             }
         }
@@ -274,32 +275,42 @@ impl MsiBuilder {
     }
 
     /// Build string pool data: returns (pool_name, pool_data, data_name, data_bytes)
+    ///
+    /// _StringPool format (per MSI spec):
+    ///   Header: u32 = codepage (low 16 bits) | long_refs_flag (bit 31)
+    ///   Per entry: u16 length + u16 refcount (4 bytes each)
+    ///
+    /// _StringData format:
+    ///   Concatenated encoded string bytes in ID order (1-based, ID 0 = null)
     fn build_string_pool(&self) -> Result<(String, Vec<u8>, String, Vec<u8>)> {
         let mut strings: Vec<_> = self.string_pool.iter().collect();
         strings.sort_by_key(|&(_, id, _)| id);
 
+        let win1252 = encoding_rs::WINDOWS_1252;
+
         // _StringPool stream
         let mut pool_data = Vec::new();
-        let mut codepage_id: u32 = 65001; // UTF-8 codepage
+        // Header: codepage in low 16 bits, long string refs flag at bit 31
+        let mut header: u32 = 1252; // Windows-1252 (standard MSI codepage)
         if self.string_pool.long_string_refs() {
-            codepage_id |= 0x80000000;
+            header |= 0x80000000;
         }
-        pool_data.write_all(&codepage_id.to_le_bytes())?;
+        pool_data.write_all(&header.to_le_bytes())?;
         for (text, _id, refcount) in &strings {
-            let encoded = StringPool::encode(text)?;
+            let (encoded, _, _had_errors) = win1252.encode(text);
+            // Entry: u16 length + u16 refcount (4 bytes per entry)
             pool_data.write_all(&(encoded.len() as u16).to_le_bytes())?;
-            pool_data.write_all(&(*refcount as u16).to_le_bytes())?;
+            pool_data.write_all(&((*refcount).min(0xFFFF) as u16).to_le_bytes())?;
         }
 
-        // _StringData stream
+        // _StringData stream - encoded string bytes in ID order
         let mut string_data = Vec::new();
         for (text, _id, _refcount) in &strings {
-            let encoded = StringPool::encode(text)?;
+            let (encoded, _, _) = win1252.encode(text);
             string_data.write_all(&encoded)?;
         }
 
         // The Windows Installer uses specific obfuscated names for the string pool streams.
-        // These are the exact encoded codepoints (verified across multiple system MSIs).
         let pool_name = "\u{4840}\u{3F3F}\u{4577}\u{446C}\u{3E6A}\u{44B2}\u{482F}".to_string();
         let data_name = "\u{4840}\u{3F3F}\u{4577}\u{446C}\u{3B6A}\u{45E4}\u{4824}".to_string();
 
@@ -327,6 +338,7 @@ pub(crate) fn encode_stream_name(name: &str, is_table: bool) -> String {
                     continue;
                 }
             }
+            // Last encodable character with no pair — encode singly
             let encoded = 0x4800 + value1;
             output.push(char::from_u32(encoded).unwrap());
         } else {
@@ -394,6 +406,10 @@ mod tests {
 
     #[test]
     fn test_encode_stream_name() {
+        let tables_enc = encode_stream_name("_Tables", true);
+        let cols_enc = encode_stream_name("_Columns", true);
+        eprintln!("_Tables encoded: {:?} ({} chars)", tables_enc, tables_enc.chars().count());
+        eprintln!("_Columns encoded: {:?} ({} chars)", cols_enc, cols_enc.chars().count());
         assert_eq!(
             encode_stream_name("_Columns", true),
             "\u{4840}\u{3b3f}\u{43f2}\u{4438}\u{45b1}"

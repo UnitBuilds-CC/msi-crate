@@ -18,6 +18,16 @@ pub enum ColumnType {
 }
 
 impl ColumnType {
+    /// Get the base bitfield value for this type (without nullable/PK/valid bits)
+    fn base_bitfield(&self) -> i32 {
+        match self {
+            ColumnType::Int16 => 0x2,
+            ColumnType::Int32 => 0x4,
+            ColumnType::StringRef { max_len } => 0x800 | (*max_len as i32),
+            ColumnType::Binary => 0x900, // COL_STRING_BIT | COL_VALID_BIT
+        }
+    }
+
     /// Get the width in bytes for this column type
     pub fn width(&self, long_string_refs: bool) -> usize {
         match self {
@@ -25,7 +35,7 @@ impl ColumnType {
             ColumnType::Int32 => 4,
             ColumnType::StringRef { .. } => {
                 if long_string_refs {
-                    4
+                    3 // Long string refs: u16 + u8 (3 bytes)
                 } else {
                     2
                 }
@@ -65,36 +75,36 @@ impl Column {
     }
 
     /// Get the bitfield value for this column (used in _Columns table)
+    ///
+    /// MSI column type bitfield layout (per spec):
+    ///   bits 0-7:  field size (max string length, or 2/4 for integers)
+    ///   bit 8:     valid bit (always set)
+    ///   bit 9:     localizable
+    ///   bit 10:    non-binary (set for Int16 and String types)
+    ///   bit 11:    string type
+    ///   bit 12:    nullable
+    ///   bit 13:    primary key
     pub fn bitfield(&self) -> i32 {
-        let mut bits = 0i32;
+        let mut bits = self.col_type.base_bitfield();
 
-        // Bits 0-7: column size/width
-        let width = match self.col_type {
-            ColumnType::Int16 => 2,
-            ColumnType::Int32 => 4,
-            ColumnType::StringRef { max_len } => max_len,
-            ColumnType::Binary => 0,
-        };
-        bits |= (width as i32) & 0xFF;
+        // bit 8: always set (COL_VALID_BIT)
+        bits |= 0x100;
 
-        // Bit 8: nullable
+        // bit 10: non-binary (set for Int16 and String types)
+        match self.col_type {
+            ColumnType::Int16 | ColumnType::StringRef { .. } => bits |= 0x400,
+            _ => {}
+        }
+
+        // bit 12: nullable
         if self.nullable {
-            bits |= 1 << 8;
+            bits |= 0x1000;
         }
 
-        // Bit 9: primary key
+        // bit 13: primary key
         if self.primary_key {
-            bits |= 1 << 9;
+            bits |= 0x2000;
         }
-
-        // Bits 10-15: type code
-        let type_code = match self.col_type {
-            ColumnType::Int16 => 2,
-            ColumnType::Int32 => 1,
-            ColumnType::StringRef { .. } => 0,
-            ColumnType::Binary => 4,
-        };
-        bits |= (type_code & 0x3F) << 10;
 
         bits
     }
@@ -226,7 +236,7 @@ impl Table {
         self.rows.len()
     }
 
-    /// Serialize the table to bytes (column-major order)
+    /// Serialize the table to bytes (row-major order)
     /// Rows are sorted by primary key (string-pool ID for strings)
     pub fn serialize(&self, string_pool: &StringPool) -> Result<Vec<u8>> {
         let mut buffer = Vec::new();
@@ -263,7 +273,7 @@ impl Table {
             std::cmp::Ordering::Equal
         });
 
-        // Write in column-major order
+        // Write in column-major order (MSI spec: all values for column 1, then column 2, etc.)
         for (col_idx, col) in self.columns.iter().enumerate() {
             for row in &sorted_rows {
                 self.write_value(&mut buffer, &row[col_idx], &col.col_type, string_pool)?;
@@ -274,6 +284,12 @@ impl Table {
     }
 
     /// Write a single value to the buffer
+    ///
+    /// Integer encoding (per MSI spec, matching rust-msi reference):
+    ///   - NULL → 0 (raw zero bytes)
+    ///   - Int16 → `(value as i16) ^ -0x8000` (XOR with 0x8000)
+    ///   - Int32 → `value ^ -0x80000000` (XOR with 0x80000000)
+    ///   - String refs → raw u16 (short) or u16+u8 (long, 3 bytes)
     fn write_value<W: Write>(
         &self,
         writer: &mut W,
@@ -291,7 +307,8 @@ impl Table {
             (Value::Null, ColumnType::StringRef { .. }) => {
                 // NULL string = string pool ID 0
                 if self.long_string_refs {
-                    writer.write_all(&0u32.to_le_bytes())?;
+                    writer.write_all(&0u16.to_le_bytes())?;
+                    writer.write_all(&[0u8])?;
                 } else {
                     writer.write_all(&0u16.to_le_bytes())?;
                 }
@@ -300,10 +317,14 @@ impl Table {
                 writer.write_all(&0u16.to_le_bytes())?;
             }
             (Value::Int(i), ColumnType::Int16) => {
-                writer.write_all(&(*i as i16).to_le_bytes())?;
+                // XOR encode: flip sign bit so non-zero values are distinguishable from NULL
+                let encoded = (*i as i16) ^ -0x8000;
+                writer.write_all(&encoded.to_le_bytes())?;
             }
             (Value::Int(i), ColumnType::Int32) => {
-                writer.write_all(&i.to_le_bytes())?;
+                // XOR encode: flip sign bit so non-zero values are distinguishable from NULL
+                let encoded = *i ^ -0x80000000i32;
+                writer.write_all(&encoded.to_le_bytes())?;
             }
             (Value::Str(s), ColumnType::StringRef { .. }) => {
                 let id = string_pool.get_id(s).ok_or_else(|| {
@@ -313,7 +334,9 @@ impl Table {
                     ))
                 })?;
                 if self.long_string_refs {
-                    writer.write_all(&id.to_le_bytes())?;
+                    // Long string refs: 3 bytes (u16 low + u8 high)
+                    writer.write_all(&((id & 0xffff) as u16).to_le_bytes())?;
+                    writer.write_all(&[((id >> 16) & 0xff) as u8])?;
                 } else {
                     writer.write_all(&(id as u16).to_le_bytes())?;
                 }
@@ -347,37 +370,32 @@ mod tests {
     fn test_column_bitfield_int16() {
         let col = Column::build("Test").int16().build();
         let bits = col.bitfield();
-        assert_eq!(bits & 0xFF, 2);       // Width = 2
-        assert_eq!((bits >> 10) & 0x3F, 2); // Type code = 2 (Int16)
-        assert_eq!(bits & (1 << 8), 0);   // Not nullable
-        assert_eq!(bits & (1 << 9), 0);   // Not primary key
+        // Int16: base=0x2, valid=0x100, nonbinary=0x400
+        assert_eq!(bits, 0x502);
     }
 
     #[test]
     fn test_column_bitfield_int32() {
         let col = Column::build("Test").int32().nullable().build();
         let bits = col.bitfield();
-        assert_eq!(bits & 0xFF, 4);       // Width = 4
-        assert_eq!((bits >> 10) & 0x3F, 1); // Type code = 1 (Int32)
-        assert_ne!(bits & (1 << 8), 0);   // Nullable
+        // Int32: base=0x4, valid=0x100, nullable=0x1000
+        assert_eq!(bits, 0x1104);
     }
 
     #[test]
     fn test_column_bitfield_string() {
         let col = Column::build("Test").string(72).primary_key().build();
         let bits = col.bitfield();
-        assert_eq!(bits & 0xFF, 72);      // Width = 72 (max_len)
-        assert_eq!((bits >> 10) & 0x3F, 0); // Type code = 0 (String)
-        assert_ne!(bits & (1 << 9), 0);   // Primary key
+        // String(72): base=0x848, valid=0x100, nonbinary=0x400, PK=0x2000
+        assert_eq!(bits, 0x2D48);
     }
 
     #[test]
     fn test_column_bitfield_binary() {
         let col = Column::build("Test").binary().nullable().build();
         let bits = col.bitfield();
-        assert_eq!(bits & 0xFF, 0);       // Width = 0 for binary
-        assert_eq!((bits >> 10) & 0x3F, 4); // Type code = 4 (Binary)
-        assert_ne!(bits & (1 << 8), 0);   // Nullable
+        // Binary: base=0x900, valid=0x100 (already in base), nullable=0x1000
+        assert_eq!(bits, 0x1900);
     }
 
     #[test]
@@ -385,7 +403,7 @@ mod tests {
         assert_eq!(ColumnType::Int16.width(false), 2);
         assert_eq!(ColumnType::Int32.width(false), 4);
         assert_eq!(ColumnType::StringRef { max_len: 72 }.width(false), 2);
-        assert_eq!(ColumnType::StringRef { max_len: 72 }.width(true), 4);
+        assert_eq!(ColumnType::StringRef { max_len: 72 }.width(true), 3); // 3 bytes for long refs
         assert_eq!(ColumnType::Binary.width(false), 2);
     }
 
@@ -446,13 +464,25 @@ mod tests {
         // = 4 + 8 = 12 bytes
         assert_eq!(data.len(), 12);
 
-        // Column A: [10, 20] as i16 LE
-        assert_eq!(i16::from_le_bytes([data[0], data[1]]), 10);
-        assert_eq!(i16::from_le_bytes([data[2], data[3]]), 20);
+        // Column A: [10, 20] XOR-encoded as i16 LE
+        // 10 ^ 0x8000 = 0x800A → [0x0A, 0x80]
+        assert_eq!(data[0], 0x0A);
+        assert_eq!(data[1], 0x80);
+        // 20 ^ 0x8000 = 0x8014 → [0x14, 0x80]
+        assert_eq!(data[2], 0x14);
+        assert_eq!(data[3], 0x80);
 
-        // Column B: [1000, 2000] as i32 LE
-        assert_eq!(i32::from_le_bytes([data[4], data[5], data[6], data[7]]), 1000);
-        assert_eq!(i32::from_le_bytes([data[8], data[9], data[10], data[11]]), 2000);
+        // Column B: [1000, 2000] XOR-encoded as i32 LE
+        // 1000 ^ 0x80000000 = 0x800003E8 → [0xE8, 0x03, 0x00, 0x80]
+        assert_eq!(data[4], 0xE8);
+        assert_eq!(data[5], 0x03);
+        assert_eq!(data[6], 0x00);
+        assert_eq!(data[7], 0x80);
+        // 2000 ^ 0x80000000 = 0x800007D0 → [0xD0, 0x07, 0x00, 0x80]
+        assert_eq!(data[8], 0xD0);
+        assert_eq!(data[9], 0x07);
+        assert_eq!(data[10], 0x00);
+        assert_eq!(data[11], 0x80);
     }
 
     #[test]
@@ -521,8 +551,8 @@ mod tests {
         table.add_row(vec![Value::Str("Hello".into())]).unwrap();
 
         let data = table.serialize(&pool).unwrap();
-        // Long string refs = 4 bytes per string ref
-        assert_eq!(data.len(), 4);
+        // Long string refs = 3 bytes per string ref (u16 + u8)
+        assert_eq!(data.len(), 3);
     }
 
     #[test]
@@ -562,14 +592,18 @@ mod tests {
 
         // Column-major: col Id (3 rows × 4 bytes) + col Val (3 rows × 4 bytes)
         // After sorting by Id: [1, 2, 3] and [10, 20, 30]
-        let id0 = i32::from_le_bytes([data[0], data[1], data[2], data[3]]);
-        let id1 = i32::from_le_bytes([data[4], data[5], data[6], data[7]]);
-        let id2 = i32::from_le_bytes([data[8], data[9], data[10], data[11]]);
-        assert_eq!((id0, id1, id2), (1, 2, 3), "Ids should be sorted");
+        // Values are XOR-encoded: decode with (raw ^ -0x80000000)
+        let decode_i32 = |offset: usize| -> i32 {
+            let raw = i32::from_le_bytes([data[offset], data[offset+1], data[offset+2], data[offset+3]]);
+            raw ^ -0x80000000i32
+        };
 
-        let val0 = i32::from_le_bytes([data[12], data[13], data[14], data[15]]);
-        let val1 = i32::from_le_bytes([data[16], data[17], data[18], data[19]]);
-        let val2 = i32::from_le_bytes([data[20], data[21], data[22], data[23]]);
-        assert_eq!((val0, val1, val2), (10, 20, 30), "Values should follow sorted order");
+        assert_eq!(decode_i32(0), 1, "Ids should be sorted");
+        assert_eq!(decode_i32(4), 2);
+        assert_eq!(decode_i32(8), 3);
+
+        assert_eq!(decode_i32(12), 10, "Values should follow sorted order");
+        assert_eq!(decode_i32(16), 20);
+        assert_eq!(decode_i32(20), 30);
     }
 }
