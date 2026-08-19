@@ -1,42 +1,48 @@
-use velocity_msi::{Column, MsiBuilder, Value};
+use velocity_msi::*;
 
 fn main() {
-    let mut builder = MsiBuilder::new();
-    builder.set_title("Test MSI");
-    builder.set_author("Velocity Installer");
-    builder.set_template("x64", 1033);
+    // Test 1: Multiple tables, no extra streams
+    let mut b = MsiBuilder::new();
+    b.set_title("Test MSI multi-table");
+    b.set_template("x64", 1033);
 
-    // Create Property table
-    builder
-        .create_table(
-            "Property",
-            vec![
-                Column::build("Property").string(72).primary_key().build(),
-                Column::build("Value").string(255).nullable().build(),
-            ],
-        )
-        .unwrap();
+    b.create_table("Property", vec![
+        Column::build("Property").string(64).primary_key().build(),
+        Column::build("Value").string(255).nullable().build(),
+    ]).unwrap();
+    b.insert_rows("Property", vec![
+        vec![Value::from("ProductName"), Value::from("Test")],
+    ]).unwrap();
 
-    // Insert some properties
-    builder
-        .insert_rows(
-            "Property",
-            vec![
-                vec![Value::from("ProductName"), Value::from("Test Product")],
-                vec![Value::from("ProductVersion"), Value::from("1.0.0")],
-                vec![Value::from("Manufacturer"), Value::from("Test Company")],
-            ],
-        )
-        .unwrap();
+    b.create_table("Directory", vec![
+        Column::build("Directory").string(64).primary_key().build(),
+        Column::build("Directory_Parent").string(64).nullable().build(),
+        Column::build("DefaultDir").string(255).nullable().build(),
+    ]).unwrap();
+    b.insert_rows("Directory", vec![
+        vec![Value::from("TARGETDIR"), Value::Null, Value::from(".")],
+    ]).unwrap();
 
-    // Build the MSI
-    let msi_data = builder.build().unwrap();
+    let data = b.build().unwrap();
+    std::fs::write("test_multi.msi", &data).unwrap();
+    println!("Multi-table (no extra streams): {} bytes", data.len());
 
-    // Write to file
-    std::fs::create_dir_all("target").ok();
-    std::fs::write("target/test_velocity_msi.msi", &msi_data).unwrap();
-    println!(
-        "Created MSI: {} bytes at target/test_velocity_msi.msi",
-        msi_data.len()
-    );
+    // Test 2: Single table + extra stream
+    let mut b2 = MsiBuilder::new();
+    b2.set_title("Test MSI with stream");
+    b2.set_template("x64", 1033);
+
+    b2.create_table("Property", vec![
+        Column::build("Property").string(64).primary_key().build(),
+        Column::build("Value").string(255).nullable().build(),
+    ]).unwrap();
+    b2.insert_rows("Property", vec![
+        vec![Value::from("ProductName"), Value::from("Test")],
+    ]).unwrap();
+
+    b2.add_stream("TestCab.dat".to_string(), vec![0u8; 5000]);
+
+    let data2 = b2.build().unwrap();
+    std::fs::write("test_stream.msi", &data2).unwrap();
+    println!("Single table + extra stream: {} bytes", data2.len());
 }

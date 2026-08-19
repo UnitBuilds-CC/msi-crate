@@ -51,8 +51,8 @@ pub struct SummaryInfo {
     pub template: Option<String>,
     pub created: Option<DateTime<Utc>>,
     pub modified: Option<DateTime<Utc>>,
-    /// Code page (must be 1252 for Windows-1252)
-    pub codepage: i16,
+    /// Code page (65001 for UTF-8)
+    pub codepage: i32,
     /// Word count (2 for MSI packages)
     pub word_count: i32,
     /// Creating application string
@@ -87,7 +87,7 @@ impl SummaryInfo {
             template: None,
             created: None,
             modified: None,
-            codepage: 1252,
+            codepage: 65001, // UTF-8
             word_count: 2,
             creating_app: None,
         }
@@ -103,15 +103,14 @@ impl SummaryInfo {
         // Collect all properties (codepage first!)
         let mut props: Vec<Prop> = Vec::new();
 
-        // PID 1: Code page (VT_I2) - MUST be first
+        // PID 1: Code page (VT_I4) - MUST be first
         props.push(Prop {
             id: PID_CODEPAGE,
-            vtype: VT_I2,
+            vtype: VT_I4,
             data: {
                 let mut d = Vec::with_capacity(8);
-                d.write_all(&VT_I2.to_le_bytes())?;
+                d.write_all(&VT_I4.to_le_bytes())?;
                 d.write_all(&self.codepage.to_le_bytes())?;
-                d.write_all(&0u16.to_le_bytes())?; // pad to 8 bytes
                 d
             },
         });
@@ -161,7 +160,7 @@ impl SummaryInfo {
 
         // === Property Set Header (48 bytes for 1 section) ===
         buf.write_all(&0xFFFEu16.to_le_bytes())?; // Byte order mark
-        buf.write_all(&0x0206u16.to_le_bytes())?; // Format version (matches Windows Installer)
+        buf.write_all(&0x0000u16.to_le_bytes())?; // Format version (0 per MS-OLEPS spec)
         buf.write_all(&6u16.to_le_bytes())?; // OS version (low word)
         buf.write_all(&2u16.to_le_bytes())?; // OS version (high word, Win32=2)
         buf.write_all(&[0u8; 16])?; // CLSID (zeros)
@@ -223,10 +222,8 @@ impl SummaryInfo {
         // Pad string data (length + string + null) to 4-byte boundary
         let str_data_len = 4 + str_len_with_null; // length field + string + null
         let padded_str_data = ((str_data_len + 3) >> 2) << 2;
-        let padding = padded_str_data - str_data_len;
-        for _ in 0..padding {
-            data.push(0);
-        }
+        let padding = (padded_str_data - str_data_len) as usize;
+        data.resize(data.len() + padding, 0);
         Ok(Prop { id, vtype: VT_LPSTR, data })
     }
 
@@ -234,7 +231,7 @@ impl SummaryInfo {
     fn filetime_prop(id: u32, dt: &DateTime<Utc>) -> Prop {
         let timestamp = dt.timestamp();
         // Convert Unix epoch to FILETIME (100ns intervals since 1601-01-01)
-        let filetime = ((timestamp as i64 + 11644473600i64) as u64) * 10_000_000;
+        let filetime = ((timestamp + 11644473600i64) as u64) * 10_000_000;
         let mut data = Vec::with_capacity(12);
         data.write_all(&VT_FILETIME.to_le_bytes()).unwrap(); // type (4 bytes)
         data.write_all(&filetime.to_le_bytes()).unwrap(); // FILETIME (8 bytes)
@@ -262,7 +259,7 @@ mod tests {
     #[test]
     fn test_default_values() {
         let si = SummaryInfo::new();
-        assert_eq!(si.codepage, 1252);
+        assert_eq!(si.codepage, 65001);
         assert_eq!(si.word_count, 2);
         assert!(si.title.is_none());
         assert!(si.author.is_none());

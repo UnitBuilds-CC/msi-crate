@@ -1,6 +1,7 @@
 //! OLE Compound File (V4) writer - from scratch
 //!
 //! Implements MS-CFB for V4 files (4096-byte sectors, 64-byte mini-sectors).
+//! V4 is the format used by Windows Installer (MSI) packages.
 //! Supports both mini streams (< 4096 bytes) and regular streams (>= 4096 bytes).
 
 const SECTOR_SHIFT: u16 = 12;
@@ -8,6 +9,7 @@ const SECTOR_SIZE: usize = 4096;
 const MINI_SECTOR_SHIFT: u16 = 6;
 const MINI_SECTOR_SIZE: usize = 64;
 const MINI_STREAM_CUTOFF: u32 = 4096;
+const HEADER_SIZE: usize = 4096;
 const DIR_ENTRY_SIZE: usize = 128;
 const DIFAT_IN_HEADER: usize = 109;
 const ENTRIES_PER_DIR_SECTOR: usize = SECTOR_SIZE / DIR_ENTRY_SIZE; // 32
@@ -103,12 +105,12 @@ impl OleWriter {
             let len = self.data[i].len();
             if len < MINI_STREAM_CUTOFF as usize {
                 self.is_mini[i] = true;
-                let padded = ((len + MINI_SECTOR_SIZE - 1) / MINI_SECTOR_SIZE) * MINI_SECTOR_SIZE;
+                let padded = len.div_ceil(MINI_SECTOR_SIZE) * MINI_SECTOR_SIZE;
                 self.start_mini[i] = (mini_total / MINI_SECTOR_SIZE) as u32;
                 mini_total += padded;
             } else {
                 self.is_mini[i] = false;
-                let sectors = (len + SECTOR_SIZE - 1) / SECTOR_SIZE;
+                let sectors = len.div_ceil(SECTOR_SIZE);
                 large_total += sectors;
             }
         }
@@ -120,12 +122,12 @@ impl OleWriter {
             if self.is_mini[i] {
                 let data = &self.data[i];
                 self.mini_stream[offset..offset + data.len()].copy_from_slice(data);
-                let padded = ((data.len() + MINI_SECTOR_SIZE - 1) / MINI_SECTOR_SIZE) * MINI_SECTOR_SIZE;
+                let padded = data.len().div_ceil(MINI_SECTOR_SIZE) * MINI_SECTOR_SIZE;
                 offset += padded;
             }
         }
 
-        self.mini_stream_sectors = (mini_total + SECTOR_SIZE - 1) / SECTOR_SIZE;
+        self.mini_stream_sectors = mini_total.div_ceil(SECTOR_SIZE);
 
         // Iteratively compute sector layout
         // Layout: [FAT sectors] [dir sectors] [minifat sectors] [mini stream] [large stream data]
@@ -136,10 +138,10 @@ impl OleWriter {
 
             // How many FAT entries do we need?
             let entries_per_fat = SECTOR_SIZE / 4; // 1024
-            let needed_fat = (total + entries_per_fat - 1) / entries_per_fat;
+            let needed_fat = total.div_ceil(entries_per_fat);
 
             // How many directory sectors do we need?
-            let needed_dir = (self.names.len() + ENTRIES_PER_DIR_SECTOR - 1) / ENTRIES_PER_DIR_SECTOR;
+            let needed_dir = self.names.len().div_ceil(ENTRIES_PER_DIR_SECTOR);
 
             if needed_fat == self.num_fat_sectors && needed_dir == self.num_dir_sectors {
                 // Layout is stable
@@ -153,7 +155,7 @@ impl OleWriter {
                 for i in 1..self.names.len() {
                     if !self.is_mini[i] {
                         self.start_sector[i] = next_sector as u32;
-                        let sectors = (self.data[i].len() + SECTOR_SIZE - 1) / SECTOR_SIZE;
+                        let sectors = self.data[i].len().div_ceil(SECTOR_SIZE);
                         self.large_streams.push((next_sector, self.data[i].clone()));
                         next_sector += sectors;
                     }
@@ -169,7 +171,7 @@ impl OleWriter {
     }
 
     fn write_file(&self) -> Vec<u8> {
-        let file_size = 4096 + self.total_sectors * SECTOR_SIZE;
+        let file_size = HEADER_SIZE + self.total_sectors * SECTOR_SIZE;
         let mut file = vec![0u8; file_size];
 
         self.write_header(&mut file);
@@ -183,7 +185,7 @@ impl OleWriter {
     }
 
     fn sector_offset(&self, sector: usize) -> usize {
-        4096 + sector * SECTOR_SIZE
+        HEADER_SIZE + sector * SECTOR_SIZE
     }
 
     fn write_header(&self, file: &mut [u8]) {
@@ -273,7 +275,7 @@ impl OleWriter {
 
         // Large stream sectors → chains
         for (start, data) in &self.large_streams {
-            let num_sectors = (data.len() + SECTOR_SIZE - 1) / SECTOR_SIZE;
+            let num_sectors = data.len().div_ceil(SECTOR_SIZE);
             for i in 0..num_sectors {
                 let sect = start + i;
                 let fat_off = self.sector_offset(self.first_fat_sector) + sect * 4;
@@ -375,7 +377,7 @@ impl OleWriter {
             if !self.is_mini[i] { continue; }
             let data_len = self.data[i].len() as u32;
             if data_len == 0 { continue; }
-            let num_ms = (data_len + MINI_SECTOR_SIZE as u32 - 1) / MINI_SECTOR_SIZE as u32;
+            let num_ms = data_len.div_ceil(MINI_SECTOR_SIZE as u32);
             let start = self.start_mini[i];
             for j in 0..num_ms {
                 let value = if j + 1 == num_ms { ENDOFCHAIN } else { start + j + 1 };
@@ -443,7 +445,7 @@ impl OleWriter {
         let node = ids[mid];
 
         // Color: even depth = black (1), odd depth = red (0)
-        let color = if depth % 2 == 0 { 1u8 } else { 0u8 };
+        let color = if depth.is_multiple_of(2) { 1u8 } else { 0u8 };
         tree.colors.insert(node, color);
 
         // Build left subtree
@@ -526,7 +528,7 @@ mod tests {
 
     /// Read a FAT entry from the first FAT sector
     fn read_fat_entry(data: &[u8], header: &OleHeader, sector: u32) -> u32 {
-        let fat_start = 4096 + header.difat_entries[0] as usize * SECTOR_SIZE;
+        let fat_start = HEADER_SIZE + header.difat_entries[0] as usize * SECTOR_SIZE;
         read_u32(data, fat_start + sector as usize * 4)
     }
 
@@ -544,7 +546,7 @@ mod tests {
     }
 
     fn parse_dir_entry(data: &[u8], header: &OleHeader, idx: usize) -> DirEntry {
-        let base = 4096 + header.first_dir_sector as usize * SECTOR_SIZE + idx * DIR_ENTRY_SIZE;
+        let base = HEADER_SIZE + header.first_dir_sector as usize * SECTOR_SIZE + idx * DIR_ENTRY_SIZE;
         let name_len = read_u16(data, base + 64) as usize; // includes null terminator
         let name_bytes = name_len.saturating_sub(2); // exclude null
         let mut name_utf16 = Vec::new();
@@ -582,7 +584,7 @@ mod tests {
         let chain = follow_chain(data, header, start);
         let mut result = Vec::with_capacity(size);
         for (i, &sect) in chain.iter().enumerate() {
-            let off = 4096 + sect as usize * SECTOR_SIZE;
+            let off = HEADER_SIZE + sect as usize * SECTOR_SIZE;
             let remaining = size - i * SECTOR_SIZE;
             let to_read = remaining.min(SECTOR_SIZE);
             result.extend_from_slice(&data[off..off + to_read]);
@@ -600,7 +602,7 @@ mod tests {
         let mini_container = read_stream_data(data, header, root_start, root_size as usize);
 
         // Follow the MiniFAT chain
-        let minifat_base = 4096 + header.first_minifat_sector as usize * SECTOR_SIZE;
+        let minifat_base = HEADER_SIZE + header.first_minifat_sector as usize * SECTOR_SIZE;
         let mut chain = Vec::new();
         let mut current = mini_start;
         loop {
@@ -769,7 +771,7 @@ mod tests {
 
     #[test]
     fn test_fat_chain_integrity() {
-        let large_data = vec![0xCC; 12288]; // 3 sectors
+        let large_data = vec![0xCC; 12288]; // 3 sectors (3 × 4096)
         let streams = vec![OleStream {
             name: "ThreeSectors".to_string(),
             data: large_data,
@@ -814,7 +816,7 @@ mod tests {
     fn test_msi_clsid_on_root() {
         let data = build_ole_file(&[]);
         let h = parse_header(&data);
-        let base = 4096 + h.first_dir_sector as usize * SECTOR_SIZE;
+        let base = HEADER_SIZE + h.first_dir_sector as usize * SECTOR_SIZE;
 
         // CLSID is at offset 80 in the root directory entry
         let clsid = &data[base + 80..base + 96];
@@ -826,8 +828,8 @@ mod tests {
         let data = build_ole_file(&[
             OleStream { name: "A".to_string(), data: vec![1; 50] },
         ]);
-        // File = header + sectors, total is always a multiple of sector size (4096)
-        assert!(data.len() >= 4096);
+        // File = header + sectors, total is always a multiple of sector size
+        assert!(data.len() >= HEADER_SIZE);
         assert_eq!(data.len() % SECTOR_SIZE, 0, "File size must be a multiple of sector size");
     }
 
@@ -840,7 +842,7 @@ mod tests {
         }];
         let data = build_ole_file(&streams);
         let h = parse_header(&data);
-        let base = 4096 + h.first_dir_sector as usize * SECTOR_SIZE + DIR_ENTRY_SIZE;
+        let base = HEADER_SIZE + h.first_dir_sector as usize * SECTOR_SIZE + DIR_ENTRY_SIZE;
 
         // Name "AB" in UTF-16LE: 0x41 0x00 0x42 0x00
         assert_eq!(data[base], 0x41);

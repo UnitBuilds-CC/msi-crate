@@ -1,10 +1,9 @@
 //! String pool management for MSI databases
 //!
-//! The string pool assigns sequential IDs to strings and handles Windows-1252 encoding.
+//! The string pool assigns sequential IDs to strings and handles UTF-8 encoding.
 //! MSI requires strings to be sorted by their pool ID, not alphabetically.
 
-use crate::error::{MsiError, Result};
-use encoding_rs::WINDOWS_1252;
+use crate::error::Result;
 use std::collections::HashMap;
 
 /// Maximum length for short strings (stored inline in table rows)
@@ -14,8 +13,8 @@ pub const MAX_SHORT_STRING: usize = 255;
 /// String pool that assigns IDs to strings
 #[derive(Debug)]
 pub struct StringPool {
-    /// Map from string text to pool ID
-    strings: HashMap<String, u32>,
+    /// Map from string text to (pool ID, reference count)
+    strings: HashMap<String, (u32, u32)>,
     /// Next ID to assign (starts at 1, 0 is reserved for empty/null)
     next_id: u32,
     /// Whether to use long string refs (4 bytes) or short (2 bytes)
@@ -39,13 +38,15 @@ impl StringPool {
             return 0; // Empty strings get ID 0
         }
 
-        if let Some(&id) = self.strings.get(text) {
+        if let Some(&(id, count)) = self.strings.get(text) {
+            // String already exists, increment refcount
+            self.strings.insert(text.to_string(), (id, count + 1));
             return id;
         }
 
         let id = self.next_id;
         self.next_id += 1;
-        self.strings.insert(text.to_string(), id);
+        self.strings.insert(text.to_string(), (id, 1));
         id
     }
 
@@ -54,21 +55,13 @@ impl StringPool {
         if text.is_empty() {
             Some(0)
         } else {
-            self.strings.get(text).copied()
+            self.strings.get(text).map(|&(id, _)| id)
         }
     }
 
-    /// Encode a string to Windows-1252 bytes
+    /// Encode a string to UTF-8 bytes
     pub fn encode(text: &str) -> Result<Vec<u8>> {
-        let (encoded, _, had_errors) = WINDOWS_1252.encode(text);
-        if had_errors {
-            Err(MsiError::EncodingError(format!(
-                "String contains characters not in Windows-1252: {:?}",
-                text
-            )))
-        } else {
-            Ok(encoded.into_owned())
-        }
+        Ok(text.as_bytes().to_vec())
     }
 
     /// Get the number of unique strings in the pool
@@ -87,8 +80,8 @@ impl StringPool {
     }
 
     /// Get all strings and their IDs for serialization
-    pub fn iter(&self) -> impl Iterator<Item = (&str, u32)> {
-        self.strings.iter().map(|(s, &id)| (s.as_str(), id))
+    pub fn iter(&self) -> impl Iterator<Item = (&str, u32, u32)> {
+        self.strings.iter().map(|(s, &(id, refcount))| (s.as_str(), id, refcount))
     }
 }
 
@@ -116,7 +109,7 @@ mod tests {
     }
 
     #[test]
-    fn test_encode_windows_1252() {
+    fn test_encode_utf8() {
         let bytes = StringPool::encode("Hello").unwrap();
         assert_eq!(bytes, vec![72, 101, 108, 108, 111]);
     }

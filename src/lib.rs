@@ -246,7 +246,6 @@ impl MsiBuilder {
                 Column::build("KeyColumn").int16().nullable().build(),
                 Column::build("Category").string(32).nullable().build(),
                 Column::build("Set").string(255).nullable().build(),
-                Column::build("Description").string(255).nullable().build(),
             ],
             self.long_string_refs,
         );
@@ -266,7 +265,6 @@ impl MsiBuilder {
                     Value::Null,
                     Value::Null,
                     Value::Null,
-                    Value::Null,
                 ])?;
             }
         }
@@ -278,24 +276,24 @@ impl MsiBuilder {
     /// Build string pool data: returns (pool_name, pool_data, data_name, data_bytes)
     fn build_string_pool(&self) -> Result<(String, Vec<u8>, String, Vec<u8>)> {
         let mut strings: Vec<_> = self.string_pool.iter().collect();
-        strings.sort_by_key(|&(_, id)| id);
+        strings.sort_by_key(|&(_, id, _)| id);
 
         // _StringPool stream
         let mut pool_data = Vec::new();
-        let mut codepage_id: u32 = 1252;
+        let mut codepage_id: u32 = 65001; // UTF-8 codepage
         if self.string_pool.long_string_refs() {
             codepage_id |= 0x80000000;
         }
         pool_data.write_all(&codepage_id.to_le_bytes())?;
-        for (text, _id) in &strings {
+        for (text, _id, refcount) in &strings {
             let encoded = StringPool::encode(text)?;
             pool_data.write_all(&(encoded.len() as u16).to_le_bytes())?;
-            pool_data.write_all(&1u16.to_le_bytes())?; // refcount = 1
+            pool_data.write_all(&(*refcount as u16).to_le_bytes())?;
         }
 
         // _StringData stream
         let mut string_data = Vec::new();
-        for (text, _id) in &strings {
+        for (text, _id, _refcount) in &strings {
             let encoded = StringPool::encode(text)?;
             string_data.write_all(&encoded)?;
         }

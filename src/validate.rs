@@ -10,7 +10,6 @@ const OLE_MAGIC: [u8; 8] = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
 const FREE_SECT: u32 = 0xFFFF_FFFF;
 const ENDOFCHAIN: u32 = 0xFFFF_FFFE;
 const DIR_ENTRY_SIZE: usize = 128;
-const DIFAT_IN_HEADER: usize = 109;
 
 /// Parsed OLE header with key offsets.
 struct OleHeader {
@@ -149,9 +148,11 @@ fn parse_header(data: &[u8]) -> Result<OleHeader> {
     let num_minifat_sectors = read_u32(data, 64);
     let mini_stream_cutoff = read_u32(data, 56);
 
-    // Read DIFAT entries from header (offset 76, 109 entries of 4 bytes each)
-    let mut difat_entries = Vec::with_capacity(DIFAT_IN_HEADER);
-    for i in 0..DIFAT_IN_HEADER {
+    // Read DIFAT entries from header (offset 76, count depends on version)
+    // V3: 4 entries (header=512), V4: 109 entries (header=4096)
+    let difat_count = (header_size - 76) / 4;
+    let mut difat_entries = Vec::with_capacity(difat_count);
+    for i in 0..difat_count {
         let val = read_u32(data, 76 + i * 4);
         if val != FREE_SECT {
             difat_entries.push(val);
@@ -241,11 +242,7 @@ fn read_directory(
             // Read name (UTF-16LE, up to 64 bytes = 32 chars)
             let name_len_with_null = read_u16(data, off + 64) as usize;
             // name_len_with_null includes null terminator, in bytes
-            let name_bytes = if name_len_with_null >= 2 {
-                name_len_with_null - 2 // subtract null terminator
-            } else {
-                0
-            };
+            let name_bytes = name_len_with_null.saturating_sub(2);
             let name_bytes = name_bytes.min(64); // Max 64 bytes of name data
 
             let mut name = String::new();
@@ -637,14 +634,14 @@ fn decode_stream_name(encoded: &str) -> Option<String> {
     let mut decoded = String::new();
     while idx < chars.len() {
         let ch = chars[idx] as u32;
-        if ch >= 0x4800 && ch <= 0x483F {
+        if (0x4800..=0x483F).contains(&ch) {
             // Single-character encoding: 0x4800 + v (check FIRST, overlaps two-char range)
             let v = ch - 0x4800;
             if let Some(c) = from_b64(v) {
                 decoded.push(c);
             }
             idx += 1;
-        } else if (ch >= 0x3800 && ch < 0x4800) || (ch > 0x483F && ch <= 0x4BFF) {
+        } else if (0x3800..0x4800).contains(&ch) || (ch > 0x483F && ch <= 0x4BFF) {
             // Two-character encoding: 0x3800 + (v2 << 6) + v1
             // Range: 0x3800-0x4BFF, excluding single-char band 0x4800-0x483F
             let combined = ch - 0x3800;
