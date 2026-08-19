@@ -16,6 +16,7 @@ use chrono::{DateTime, Utc};
 use std::io::Write;
 
 // OLE Property Set VT_* type codes
+const VT_I2: u32 = 2;
 const VT_I4: u32 = 3;
 const VT_LPSTR: u32 = 30;
 const VT_FILETIME: u32 = 64;
@@ -102,14 +103,16 @@ impl SummaryInfo {
         // Collect all properties (codepage first!)
         let mut props: Vec<Prop> = Vec::new();
 
-        // PID 1: Code page (VT_I4) - MUST be first
+        // PID 1: Code page (VT_I2) - MUST be first
+        // Per MS-OLEPS spec, codepage is a 2-byte integer
         props.push(Prop {
             id: PID_CODEPAGE,
-            vtype: VT_I4,
+            vtype: VT_I2,
             data: {
                 let mut d = Vec::with_capacity(8);
-                d.write_all(&VT_I4.to_le_bytes())?;
-                d.write_all(&self.codepage.to_le_bytes())?;
+                d.write_all(&VT_I2.to_le_bytes())?; // type (4 bytes)
+                d.write_all(&(self.codepage as i16).to_le_bytes())?; // value (2 bytes)
+                d.write_all(&[0u8; 2])?; // padding to 4-byte boundary
                 d
             },
         });
