@@ -372,7 +372,7 @@ impl OleWriter {
             file[base + j..base + j + 4].copy_from_slice(&FREE_SECT.to_le_bytes());
         }
 
-        let mut off = base;
+        // Write MiniFAT entries at the correct offsets
         for i in 1..self.names.len() {
             if !self.is_mini[i] { continue; }
             let data_len = self.data[i].len() as u32;
@@ -380,9 +380,10 @@ impl OleWriter {
             let num_ms = data_len.div_ceil(MINI_SECTOR_SIZE as u32);
             let start = self.start_mini[i];
             for j in 0..num_ms {
-                let value = if j + 1 == num_ms { ENDOFCHAIN } else { start + j + 1 };
+                let mini_sect = start + j;
+                let value = if j + 1 == num_ms { ENDOFCHAIN } else { mini_sect + 1 };
+                let off = base + (mini_sect as usize) * 4;
                 file[off..off + 4].copy_from_slice(&value.to_le_bytes());
-                off += 4;
             }
         }
     }

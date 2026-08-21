@@ -16,12 +16,6 @@ chrono = "0.4"
 # Error handling
 thiserror = "1.0"
 
-# OLE compound file generation
-cfb = "0.14"
-
-# UUID generation for CLSID
-uuid = "1.0"
-
 [dev-dependencies]
 tempfile = "3.10"
 cfb = "0.14"

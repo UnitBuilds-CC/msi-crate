@@ -211,8 +211,8 @@ impl MsiBuilder {
             });
         }
 
-        // Build the OLE compound file using the cfb crate
-        build_ole_with_cfb(&ole_streams)
+        // Build the OLE compound file using our custom OLE V4 writer
+        Ok(ole::build_ole_file(&ole_streams))
     }
 
     /// Create the system tables (_Tables, _Columns, _Validation)
@@ -508,45 +508,6 @@ impl Default for MsiBuilder {
     fn default() -> Self {
         Self::new()
     }
-}
-
-/// Build an OLE V4 compound file using the cfb crate.
-///
-/// This replaces the custom OLE writer with the well-tested cfb crate,
-/// which produces files that msiexec can properly read and install from.
-fn build_ole_with_cfb(streams: &[ole::OleStream]) -> Result<Vec<u8>> {
-    use std::io::Cursor;
-    
-    // Create a new V4 compound file explicitly
-    let cursor = Cursor::new(Vec::new());
-    let mut comp = cfb::CompoundFile::create_with_version(cfb::Version::V4, cursor)
-        .map_err(|e| MsiError::CfbError(format!("Failed to create compound file: {}", e)))?;
-    
-    // Set the MSI CLSID on the root entry
-    // MSI CLSID: {000C1084-0000-0000-C000-000000000046}
-    let msi_clsid = uuid::Uuid::parse_str("000C1084-0000-0000-C000-000000000046")
-        .map_err(|e| MsiError::CfbError(format!("Failed to parse MSI CLSID: {}", e)))?;
-    comp.set_storage_clsid("/", msi_clsid)
-        .map_err(|e| MsiError::CfbError(format!("Failed to set root CLSID: {}", e)))?;
-    
-    // Add each stream
-    for stream in streams {
-        {
-            let mut writer = comp.create_stream(&stream.name)
-                .map_err(|e| MsiError::CfbError(format!("Failed to create stream '{}': {}", stream.name, e)))?;
-            writer.write_all(&stream.data)
-                .map_err(|e| MsiError::CfbError(format!("Failed to write stream '{}': {}", stream.name, e)))?;
-            // Stream is dropped here, which should flush it
-        }
-    }
-    
-    // Flush all changes to the underlying file
-    comp.flush()
-        .map_err(|e| MsiError::CfbError(format!("Failed to flush compound file: {}", e)))?;
-    
-    // Extract the final bytes
-    let cursor = comp.into_inner();
-    Ok(cursor.into_inner())
 }
 
 #[cfg(test)]
