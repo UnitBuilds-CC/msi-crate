@@ -61,6 +61,10 @@ pub struct Column {
     pub nullable: bool,
     /// Whether this column is part of the primary key
     pub primary_key: bool,
+    /// Whether this column is localizable (bit 0x200)
+    pub localizable: bool,
+    /// Validation category (e.g. "Identifier", "Text", "Formatted")
+    pub category: Option<String>,
 }
 
 impl Column {
@@ -71,6 +75,8 @@ impl Column {
             col_type: ColumnType::Int32,
             nullable: false,
             primary_key: false,
+            localizable: false,
+            category: None,
         }
     }
 
@@ -78,7 +84,7 @@ impl Column {
     ///
     /// MSI column type bitfield layout (per spec):
     ///   bits 0-7:  field size (max string length, or 2/4 for integers)
-    ///   bit 8:     valid bit (always set)
+    ///   bit 8:     integer valid bit (set ONLY for Int16/Int32 types)
     ///   bit 9:     localizable
     ///   bit 10:    non-binary (set for Int16 and String types)
     ///   bit 11:    string type
@@ -87,13 +93,26 @@ impl Column {
     pub fn bitfield(&self) -> i32 {
         let mut bits = self.col_type.base_bitfield();
 
-        // bit 8: always set (COL_VALID_BIT)
+        // bit 8: integer valid bit (COL_VALID_BIT)
+        // Per MSI spec (and matching msi crate reference), this bit is set
+        // for ALL column types, not just integers.
         bits |= 0x100;
 
-        // bit 10: non-binary (set for Int16 and String types)
-        match self.col_type {
-            ColumnType::Int16 | ColumnType::StringRef { .. } => bits |= 0x400,
-            _ => {}
+        // bit 9: localizable (COL_LOCALIZABLE_BIT)
+        if self.localizable {
+            bits |= 0x200;
+        }
+
+        // bit 10: non-binary (COL_NONBINARY_BIT)
+        // Set for Int16 and ALL string columns (regardless of max_len).
+        let nonbinary = match self.col_type {
+            ColumnType::Int16 => true,
+            ColumnType::Int32 => false,
+            ColumnType::StringRef { .. } => true,
+            ColumnType::Binary => false,
+        };
+        if nonbinary {
+            bits |= 0x400;
         }
 
         // bit 12: nullable
@@ -116,6 +135,8 @@ pub struct ColumnBuilder {
     col_type: ColumnType,
     nullable: bool,
     primary_key: bool,
+    localizable: bool,
+    category: Option<String>,
 }
 
 impl ColumnBuilder {
@@ -143,6 +164,13 @@ impl ColumnBuilder {
         self
     }
 
+    /// Mark as localizable (sets bit 0x200 in the column type bitfield).
+    /// Required for columns that contain translatable strings (e.g., Property.Value).
+    pub fn localizable(mut self) -> Self {
+        self.localizable = true;
+        self
+    }
+
     /// Mark as nullable
     pub fn nullable(mut self) -> Self {
         self.nullable = true;
@@ -155,6 +183,12 @@ impl ColumnBuilder {
         self
     }
 
+    /// Set the validation category (e.g. "Identifier", "Text", "Formatted")
+    pub fn category(mut self, cat: &str) -> Self {
+        self.category = Some(cat.to_string());
+        self
+    }
+
     /// Build the column
     pub fn build(self) -> Column {
         Column {
@@ -162,6 +196,8 @@ impl ColumnBuilder {
             col_type: self.col_type,
             nullable: self.nullable,
             primary_key: self.primary_key,
+            localizable: self.localizable,
+            category: self.category,
         }
     }
 }
@@ -206,6 +242,10 @@ pub struct Table {
     long_string_refs: bool,
     /// Rows (each row is a Vec of Values)
     rows: Vec<Vec<Value>>,
+    /// System tables (_Tables, _Columns, _Validation) use raw integer encoding
+    /// instead of XOR encoding. User tables use XOR encoding to distinguish
+    /// NULL (0) from valid values.
+    is_system: bool,
 }
 
 impl Table {
@@ -216,7 +256,13 @@ impl Table {
             columns,
             long_string_refs,
             rows: Vec::new(),
+            is_system: false,
         }
+    }
+
+    /// Mark this table as a system table (raw integer encoding, no XOR).
+    pub fn set_system(&mut self) {
+        self.is_system = true;
     }
 
     /// Add a row to the table
@@ -241,37 +287,45 @@ impl Table {
     pub fn serialize(&self, string_pool: &StringPool) -> Result<Vec<u8>> {
         let mut buffer = Vec::new();
 
-        // Sort rows by primary key
+        // Sort rows by primary key using bubble sort
+        let cols = &self.columns;
+        let pk_indices: Vec<usize> = cols.iter().enumerate()
+            .filter(|(_, col)| col.primary_key && !matches!(col.col_type, ColumnType::Binary))
+            .map(|(i, _)| i)
+            .collect();
+        
         let mut sorted_rows = self.rows.clone();
-        sorted_rows.sort_by(|a, b| {
-            for (col_idx, col) in self.columns.iter().enumerate() {
-                if !col.primary_key {
-                    continue;
-                }
-                if matches!(col.col_type, ColumnType::Binary) {
-                    continue; // Binary columns are not sorted
-                }
-
-                let cmp = match (&a[col_idx], &b[col_idx]) {
-                    (Value::Null, Value::Null) => std::cmp::Ordering::Equal,
-                    (Value::Null, _) => std::cmp::Ordering::Less,
-                    (_, Value::Null) => std::cmp::Ordering::Greater,
-                    (Value::Int(a), Value::Int(b)) => a.cmp(b),
-                    (Value::Str(a), Value::Str(b)) => {
-                        // Compare by string-pool ID
-                        let id_a = string_pool.get_id(a).unwrap_or(0);
-                        let id_b = string_pool.get_id(b).unwrap_or(0);
-                        id_a.cmp(&id_b)
+        let len = sorted_rows.len();
+        for i in 0..len {
+            for j in 0..len.saturating_sub(1).saturating_sub(i) {
+                let should_swap = {
+                    let a = &sorted_rows[j];
+                    let b = &sorted_rows[j + 1];
+                    let mut cmp = std::cmp::Ordering::Equal;
+                    for &col_idx in &pk_indices {
+                        cmp = match (&a[col_idx], &b[col_idx]) {
+                            (Value::Null, Value::Null) => std::cmp::Ordering::Equal,
+                            (Value::Null, _) => std::cmp::Ordering::Less,
+                            (_, Value::Null) => std::cmp::Ordering::Greater,
+                            (Value::Int(x), Value::Int(y)) => x.cmp(y),
+                            (Value::Str(x), Value::Str(y)) => {
+                                // Sort by string VALUE (alphabetical), matching
+                                // the msi crate's BTreeMap<Vec<Value>> ordering.
+                                x.cmp(y)
+                            }
+                            _ => std::cmp::Ordering::Equal,
+                        };
+                        if cmp != std::cmp::Ordering::Equal {
+                            break;
+                        }
                     }
-                    _ => std::cmp::Ordering::Equal,
+                    cmp == std::cmp::Ordering::Greater
                 };
-
-                if cmp != std::cmp::Ordering::Equal {
-                    return cmp;
+                if should_swap {
+                    sorted_rows.swap(j, j + 1);
                 }
             }
-            std::cmp::Ordering::Equal
-        });
+        }
 
         // Write in column-major order (MSI spec: all values for column 1, then column 2, etc.)
         for (col_idx, col) in self.columns.iter().enumerate() {
@@ -317,12 +371,12 @@ impl Table {
                 writer.write_all(&0u16.to_le_bytes())?;
             }
             (Value::Int(i), ColumnType::Int16) => {
-                // XOR encode: flip sign bit so non-zero values are distinguishable from NULL
+                // All tables (including system tables) use XOR encoding
                 let encoded = (*i as i16) ^ -0x8000;
                 writer.write_all(&encoded.to_le_bytes())?;
             }
             (Value::Int(i), ColumnType::Int32) => {
-                // XOR encode: flip sign bit so non-zero values are distinguishable from NULL
+                // All tables (including system tables) use XOR encoding
                 let encoded = *i ^ -0x80000000i32;
                 writer.write_all(&encoded.to_le_bytes())?;
             }
@@ -394,7 +448,7 @@ mod tests {
     fn test_column_bitfield_binary() {
         let col = Column::build("Test").binary().nullable().build();
         let bits = col.bitfield();
-        // Binary: base=0x900, valid=0x100 (already in base), nullable=0x1000
+        // Binary: base=0x900 (includes valid bit), nullable=0x1000
         assert_eq!(bits, 0x1900);
     }
 

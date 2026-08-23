@@ -219,8 +219,14 @@ fn read_directory(
     // Follow directory sector chain
     let mut sector = header.first_dir_sector;
     let mut sectors_read = 0u32;
+    // For V3, num_dir_sectors may be 0 (cfb convention). Use a safe upper bound.
+    let max_dir_sectors = if header.num_dir_sectors > 0 {
+        header.num_dir_sectors
+    } else {
+        1024 // generous limit for V3 files where header field is 0
+    };
     while sector != ENDOFCHAIN && sector != FREE_SECT {
-        if sectors_read >= header.num_dir_sectors {
+        if sectors_read >= max_dir_sectors {
             break; // Prevent infinite loops
         }
         let base = sector_offset(sector as usize, sector_size, header.header_size);
@@ -414,11 +420,12 @@ fn parse_string_pool(
         idx += 4;
 
         if data_offset + str_len <= data_bytes.len() {
-            // String data is Windows-1252 encoded
+            // String data is Windows-1252 encoded, NO null terminators.
+            // Length is the exact byte length of the encoded string.
             let raw = &data_bytes[data_offset..data_offset + str_len];
             let text = String::from_utf8_lossy(raw).to_string();
             map.insert(id, text);
-            data_offset += str_len;
+            data_offset += str_len; // advance past encoded string
         }
 
         id += 1;

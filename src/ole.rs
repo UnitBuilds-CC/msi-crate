@@ -1,18 +1,18 @@
-//! OLE Compound File (V4) writer - from scratch
+//! OLE Compound File writer - from scratch
 //!
-//! Implements MS-CFB for V4 files (4096-byte sectors, 64-byte mini-sectors).
-//! V4 is the format used by Windows Installer (MSI) packages.
+//! Implements MS-CFB for V3 files (512-byte sectors, 64-byte mini-sectors).
+//! V3 is the format required by Windows Installer (MSI) packages.
 //! Supports both mini streams (< 4096 bytes) and regular streams (>= 4096 bytes).
 
-const SECTOR_SHIFT: u16 = 12;
-const SECTOR_SIZE: usize = 4096;
+const SECTOR_SHIFT: u16 = 9;  // V3: 512 bytes (2^9)
+const SECTOR_SIZE: usize = 512;
 const MINI_SECTOR_SHIFT: u16 = 6;
 const MINI_SECTOR_SIZE: usize = 64;
 const MINI_STREAM_CUTOFF: u32 = 4096;
-const HEADER_SIZE: usize = 4096;
+const HEADER_SIZE: usize = 512;  // V3: 512 bytes
 const DIR_ENTRY_SIZE: usize = 128;
 const DIFAT_IN_HEADER: usize = 109;
-const ENTRIES_PER_DIR_SECTOR: usize = SECTOR_SIZE / DIR_ENTRY_SIZE; // 32
+const ENTRIES_PER_DIR_SECTOR: usize = SECTOR_SIZE / DIR_ENTRY_SIZE; // 4 for V3
 
 const FREE_SECT: u32 = 0xFFFF_FFFF;
 const ENDOFCHAIN: u32 = 0xFFFF_FFFE;
@@ -34,7 +34,7 @@ pub struct OleStream {
     pub data: Vec<u8>,
 }
 
-/// Build a complete OLE V4 compound file from the given streams.
+/// Build a complete OLE V3 compound file from the given streams.
 pub fn build_ole_file(streams: &[OleStream]) -> Vec<u8> {
     OleWriter::build(streams)
 }
@@ -97,11 +97,30 @@ impl OleWriter {
     }
 
     fn compute_layout(&mut self) {
-        // Separate mini and large streams
+        // Sort stream IDs by name (case-insensitive shortlex) to match directory order.
+        // The mini stream MUST be laid out in the same order as directory entries,
+        // because directory entries reference mini-stream positions by index.
+        let mut sorted_ids: Vec<usize> = (1..self.names.len()).collect();
+        sorted_ids.sort_by(|&a, &b| {
+            let name_a = &self.names[a];
+            let name_b = &self.names[b];
+            let len_a = name_a.encode_utf16().count();
+            let len_b = name_b.encode_utf16().count();
+            match len_a.cmp(&len_b) {
+                std::cmp::Ordering::Equal => {
+                    let chars_a = name_a.chars().map(|c| c.to_uppercase().next().unwrap_or(c));
+                    let chars_b = name_b.chars().map(|c| c.to_uppercase().next().unwrap_or(c));
+                    chars_a.cmp(chars_b)
+                }
+                other => other,
+            }
+        });
+
+        // Separate mini and large streams, laying out mini streams in SORTED order
         let mut mini_total = 0usize;
         let mut large_total = 0usize;
 
-        for i in 1..self.names.len() {
+        for &i in &sorted_ids {
             let len = self.data[i].len();
             if len < MINI_STREAM_CUTOFF as usize {
                 self.is_mini[i] = true;
@@ -115,10 +134,12 @@ impl OleWriter {
             }
         }
 
-        // Build mini stream data
+        // Build mini stream data in SORTED order.
+        // Directory entries at positions 1..=N correspond to sorted_ids[0..N],
+        // so start_mini must be assigned in sorted order to match.
         self.mini_stream = vec![0u8; mini_total];
         let mut offset = 0;
-        for i in 1..self.names.len() {
+        for &i in &sorted_ids {
             if self.is_mini[i] {
                 let data = &self.data[i];
                 self.mini_stream[offset..offset + data.len()].copy_from_slice(data);
@@ -128,6 +149,11 @@ impl OleWriter {
         }
 
         self.mini_stream_sectors = mini_total.div_ceil(SECTOR_SIZE);
+
+        // Calculate MiniFAT requirements: each MiniFAT sector holds 128 entries
+        let mini_entries_per_minifat = SECTOR_SIZE / 4; // 128
+        let total_mini_sectors = mini_total.div_ceil(MINI_SECTOR_SIZE);
+        self.num_minifat_sectors = (total_mini_sectors.max(1)).div_ceil(mini_entries_per_minifat);
 
         // Iteratively compute sector layout
         // Layout: [FAT sectors] [dir sectors] [minifat sectors] [mini stream] [large stream data]
@@ -193,27 +219,28 @@ impl OleWriter {
         file[o..o + 8].copy_from_slice(&[0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1]);
         o += 8;
         o += 16; // CLSID (zeros)
-        file[o..o + 2].copy_from_slice(&0x003Eu16.to_le_bytes()); o += 2; // minor ver
-        file[o..o + 2].copy_from_slice(&4u16.to_le_bytes()); o += 2; // major ver (V4)
+        file[o..o + 2].copy_from_slice(&0x003Eu16.to_le_bytes()); o += 2; // minor ver (standard CFB value)
+        file[o..o + 2].copy_from_slice(&3u16.to_le_bytes()); o += 2; // major ver (V3 for MSI)
         file[o..o + 2].copy_from_slice(&0xFFFEu16.to_le_bytes()); o += 2; // byte order
         file[o..o + 2].copy_from_slice(&SECTOR_SHIFT.to_le_bytes()); o += 2;
         file[o..o + 2].copy_from_slice(&MINI_SECTOR_SHIFT.to_le_bytes()); o += 2;
         o += 6; // reserved
-        file[o..o + 4].copy_from_slice(&(self.num_dir_sectors as u32).to_le_bytes()); o += 4;
+        // For V3, NumDirSectors = 0 (per MS-CFB spec, SHOULD be 0 for V3).
+        file[o..o + 4].copy_from_slice(&0u32.to_le_bytes()); o += 4;
         file[o..o + 4].copy_from_slice(&(self.num_fat_sectors as u32).to_le_bytes()); o += 4;
         file[o..o + 4].copy_from_slice(&(self.first_dir_sector as u32).to_le_bytes()); o += 4;
         o += 4; // transaction sig
         file[o..o + 4].copy_from_slice(&MINI_STREAM_CUTOFF.to_le_bytes()); o += 4;
         file[o..o + 4].copy_from_slice(&(self.first_minifat_sector as u32).to_le_bytes()); o += 4;
         file[o..o + 4].copy_from_slice(&(self.num_minifat_sectors as u32).to_le_bytes()); o += 4;
-        file[o..o + 4].copy_from_slice(&ENDOFCHAIN.to_le_bytes()); o += 4; // first DIFAT (none)
+        file[o..o + 4].copy_from_slice(&FREE_SECT.to_le_bytes()); o += 4; // first DIFAT (none → FREE_SECT per MS-CFB)
         file[o..o + 4].copy_from_slice(&0u32.to_le_bytes()); o += 4; // DIFAT count
-        // DIFAT array
+        // DIFAT array: first N entries are FAT sector numbers, rest must be FREE_SECT
         for i in 0..DIFAT_IN_HEADER {
             let val = if i < self.num_fat_sectors {
                 (self.first_fat_sector + i) as u32
             } else {
-                FREE_SECT
+                FREE_SECT  // MS-CFB: unused header DIFAT entries = FREE_SECT (-1)
             };
             file[o..o + 4].copy_from_slice(&val.to_le_bytes());
             o += 4;
@@ -293,31 +320,52 @@ impl OleWriter {
         let base = self.sector_offset(self.first_dir_sector);
         let num_entries = self.names.len();
 
-        // Sort streams by name for directory tree ordering
-        // OLE comparison: by UTF-16 length first, then case-insensitive UTF-16 comparison
-        let mut stream_ids: Vec<usize> = (1..num_entries).collect();
-        stream_ids.sort_by(|&a, &b| {
-            let len_a = self.names[a].encode_utf16().count();
-            let len_b = self.names[b].encode_utf16().count();
-            len_a.cmp(&len_b).then_with(|| {
-                let utf16_a: Vec<u16> = self.names[a].encode_utf16().collect();
-                let utf16_b: Vec<u16> = self.names[b].encode_utf16().collect();
-                utf16_a.cmp(&utf16_b)
-            })
+        // Sort stream IDs according to CFB directory ordering:
+        // case-insensitive shortlex order (matching the cfb crate).
+        // 1. Shorter names (by UTF-16 code unit count) come first.
+        // 2. Same-length names compared by uppercased char code points.
+        let mut sorted_ids: Vec<usize> = (1..num_entries).collect();
+        sorted_ids.sort_by(|&a, &b| {
+            let name_a = &self.names[a];
+            let name_b = &self.names[b];
+            let len_a = name_a.encode_utf16().count();
+            let len_b = name_b.encode_utf16().count();
+            match len_a.cmp(&len_b) {
+                std::cmp::Ordering::Equal => {
+                    let chars_a = name_a.chars().map(|c| c.to_uppercase().next().unwrap_or(c));
+                    let chars_b = name_b.chars().map(|c| c.to_uppercase().next().unwrap_or(c));
+                    chars_a.cmp(chars_b)
+                }
+                other => other,
+            }
         });
 
-        // Build balanced BST with red-black coloring
-        let tree = Self::build_dir_tree(&stream_ids);
+        // Build balanced BST using DIRECTORY POSITIONS as node IDs.
+        // Position 0 = root of BST, positions 1..N = children.
+        // This ensures tree pointers reference directory entry positions
+        // that satisfy the BST property (left < parent < right by name).
+        let tree = Self::build_dir_tree_by_position(&sorted_ids);
         let tree_root = tree.root;
 
-        for did in 0..num_entries {
-            let off = base + did * DIR_ENTRY_SIZE;
-            self.write_dir_entry(file, off, did, tree_root, &tree);
+        // Write root entry at position 0
+        self.write_dir_entry_pos(file, base, 0, 0, tree_root, &tree, &sorted_ids);
+
+        // Write stream entries at positions 1..N (sorted_ids[i-1] = stream for position i)
+        for i in 0..sorted_ids.len() {
+            let dir_pos = i + 1;
+            let stream_id = sorted_ids[i];
+            self.write_dir_entry_pos(file, base, dir_pos, stream_id, tree_root, &tree, &sorted_ids);
         }
     }
 
-    fn write_dir_entry(&self, file: &mut [u8], off: usize, did: usize, root_child: i32, tree: &DirTree) {
-        let name_utf16: Vec<u16> = self.names[did].encode_utf16().collect();
+    /// Write a directory entry at the given directory position.
+    /// `dir_pos` = position in directory (0 = root, 1+ = streams in sorted order).
+    /// `stream_id` = index into names/data arrays.
+    /// Tree node IDs are directory positions (0, 1, 2, ...).
+    fn write_dir_entry_pos(&self, file: &mut [u8], base: usize, dir_pos: usize, stream_id: usize,
+                           root_child: i32, tree: &DirTree, _sorted_ids: &[usize]) {
+        let off = base + dir_pos * DIR_ENTRY_SIZE;
+        let name_utf16: Vec<u16> = self.names[stream_id].encode_utf16().collect();
         let name_byte_len = name_utf16.len() * 2;
         let copy_bytes = name_byte_len.min(64);
         let name_bytes: Vec<u8> = name_utf16.iter()
@@ -328,51 +376,56 @@ impl OleWriter {
 
         let name_len_with_null = (name_utf16.len() as u16 + 1) * 2;
         file[off + 64..off + 66].copy_from_slice(&name_len_with_null.to_le_bytes());
-        file[off + 66] = if did == 0 { OBJTYPE_ROOT } else { OBJTYPE_STREAM };
+        file[off + 66] = if dir_pos == 0 { OBJTYPE_ROOT } else { OBJTYPE_STREAM };
         // Color: 0 = red, 1 = black
-        let color = if did == 0 { 1 } else { tree.colors.get(&did).copied().unwrap_or(1) };
+        let color = if dir_pos == 0 { 1 } else { tree.colors.get(&dir_pos).copied().unwrap_or(1) };
         file[off + 67] = color;
 
-        let (left, right, child) = if did == 0 {
+        let (left, right, child) = if dir_pos == 0 {
             (-1i32, -1i32, root_child)
         } else {
-            let l = tree.left.get(&did).copied().unwrap_or(-1);
-            let r = tree.right.get(&did).copied().unwrap_or(-1);
+            let l = tree.left.get(&dir_pos).copied().unwrap_or(-1);
+            let r = tree.right.get(&dir_pos).copied().unwrap_or(-1);
             (l, r, -1)
         };
         file[off + 68..off + 72].copy_from_slice(&left.to_le_bytes());
         file[off + 72..off + 76].copy_from_slice(&right.to_le_bytes());
         file[off + 76..off + 80].copy_from_slice(&child.to_le_bytes());
 
-        if did == 0 {
+        // CLSID on root entry - MSI CLSID: {000C1084-0000-0000-C000-000000000046}
+        if dir_pos == 0 {
             file[off + 80..off + 96].copy_from_slice(&MSI_CLSID);
         }
 
         // Starting sector/mini-sector
-        if did == 0 {
+        if dir_pos == 0 {
             file[off + 116..off + 120].copy_from_slice(&(self.first_mini_sector as u32).to_le_bytes());
-        } else if self.is_mini[did] {
-            file[off + 116..off + 120].copy_from_slice(&self.start_mini[did].to_le_bytes());
+        } else if self.is_mini[stream_id] {
+            file[off + 116..off + 120].copy_from_slice(&self.start_mini[stream_id].to_le_bytes());
         } else {
-            file[off + 116..off + 120].copy_from_slice(&self.start_sector[did].to_le_bytes());
+            file[off + 116..off + 120].copy_from_slice(&self.start_sector[stream_id].to_le_bytes());
         }
 
-        let size = if did == 0 {
+        let size = if dir_pos == 0 {
             self.mini_stream.len() as u64
         } else {
-            self.data[did].len() as u64
+            self.data[stream_id].len() as u64
         };
         file[off + 120..off + 128].copy_from_slice(&size.to_le_bytes());
     }
 
     fn write_minifat(&self, file: &mut [u8]) {
-        let base = self.sector_offset(self.first_minifat_sector);
-        // Initialize to FREE
-        for j in (0..SECTOR_SIZE).step_by(4) {
-            file[base + j..base + j + 4].copy_from_slice(&FREE_SECT.to_le_bytes());
+        // Initialize ALL MiniFAT sectors to FREE (not just the first one)
+        for s in 0..self.num_minifat_sectors {
+            let base = self.sector_offset(self.first_minifat_sector + s);
+            for j in (0..SECTOR_SIZE).step_by(4) {
+                file[base + j..base + j + 4].copy_from_slice(&FREE_SECT.to_le_bytes());
+            }
         }
 
         // Write MiniFAT entries at the correct offsets
+        // MiniFAT sectors are contiguous, so we can use a linear offset from the first sector.
+        let minifat_base = self.sector_offset(self.first_minifat_sector);
         for i in 1..self.names.len() {
             if !self.is_mini[i] { continue; }
             let data_len = self.data[i].len() as u32;
@@ -382,7 +435,7 @@ impl OleWriter {
             for j in 0..num_ms {
                 let mini_sect = start + j;
                 let value = if j + 1 == num_ms { ENDOFCHAIN } else { mini_sect + 1 };
-                let off = base + (mini_sect as usize) * 4;
+                let off = minifat_base + (mini_sect as usize) * 4;
                 file[off..off + 4].copy_from_slice(&value.to_le_bytes());
             }
         }
@@ -410,12 +463,14 @@ struct DirTree {
 }
 
 impl OleWriter {
-    /// Build a balanced binary search tree from sorted stream IDs.
+    /// Build a balanced BST using directory positions as node IDs.
     ///
-    /// Uses recursive median splitting to create a balanced BST, then assigns
-    /// red-black colors based on depth: root is black, alternating levels are
-    /// red/black. This matches the OLE compound file directory tree spec.
-    fn build_dir_tree(sorted_ids: &[usize]) -> DirTree {
+    /// Position 0 = root entry. Positions 1..N = stream entries in sorted order.
+    /// The BST is built so that for any node at position P:
+    /// - Left subtree nodes have positions < P (smaller names)
+    /// - Right subtree nodes have positions > P (larger names)
+    /// This satisfies the OLE directory BST property.
+    fn build_dir_tree_by_position(sorted_ids: &[usize]) -> DirTree {
         let mut tree = DirTree {
             root: -1,
             left: std::collections::HashMap::new(),
@@ -427,41 +482,27 @@ impl OleWriter {
             return tree;
         }
 
-        tree.root = Self::build_subtree(sorted_ids, 0, &mut tree) as i32;
+        // Node 0 = root. Nodes 1..=N = streams in sorted order.
+        // Build a balanced BST from positions 1..=N.
+        let n = sorted_ids.len();
+        let positions: Vec<usize> = (1..=n).collect();
+
+        fn build_subtree(positions: &[usize], tree: &mut DirTree) -> i32 {
+            if positions.is_empty() {
+                return -1;
+            }
+            let mid = positions.len() / 2;
+            let pos = positions[mid];
+            tree.colors.insert(pos, 1); // all black
+            let left = build_subtree(&positions[..mid], tree);
+            let right = build_subtree(&positions[mid + 1..], tree);
+            tree.left.insert(pos, left);
+            tree.right.insert(pos, right);
+            pos as i32
+        }
+
+        tree.root = build_subtree(&positions, &mut tree);
         tree
-    }
-
-    /// Recursively build a balanced BST from sorted_ids[depth..].
-    /// Returns the root node's directory entry ID.
-    fn build_subtree(
-        ids: &[usize],
-        depth: usize,
-        tree: &mut DirTree,
-    ) -> usize {
-        if ids.is_empty() {
-            return 0; // Should never happen for valid calls
-        }
-
-        let mid = ids.len() / 2;
-        let node = ids[mid];
-
-        // Color: even depth = black (1), odd depth = red (0)
-        let color = if depth.is_multiple_of(2) { 1u8 } else { 0u8 };
-        tree.colors.insert(node, color);
-
-        // Build left subtree
-        if mid > 0 {
-            let left_root = Self::build_subtree(&ids[..mid], depth + 1, tree);
-            tree.left.insert(node, left_root as i32);
-        }
-
-        // Build right subtree
-        if mid + 1 < ids.len() {
-            let right_root = Self::build_subtree(&ids[mid + 1..], depth + 1, tree);
-            tree.right.insert(node, right_root as i32);
-        }
-
-        node
     }
 }
 
@@ -631,11 +672,11 @@ mod tests {
         let data = build_ole_file(&[]);
         let h = parse_header(&data);
 
-        assert_eq!(h.major_version, 4, "Must be V4");
-        assert_eq!(h.sector_shift, 12, "4096-byte sectors");
+        assert_eq!(h.major_version, 3, "Must be V3");
+        assert_eq!(h.sector_shift, 9, "512-byte sectors");
         assert_eq!(h.mini_sector_shift, 6, "64-byte mini-sectors");
         assert_eq!(h.mini_stream_cutoff, 4096);
-        assert_eq!(h.num_dir_sectors, 1);
+        assert_eq!(h.num_dir_sectors, 0, "V3: NumDirSectors = 0");
         assert_eq!(h.num_fat_sectors, 1);
         assert_eq!(h.num_minifat_sectors, 1);
         assert_eq!(h.difat_entries.len(), 1);
@@ -657,7 +698,7 @@ mod tests {
         let data = build_ole_file(&streams);
         let h = parse_header(&data);
 
-        assert_eq!(h.major_version, 4);
+        assert_eq!(h.major_version, 3);
 
         // Root entry should have a child
         let root = parse_dir_entry(&data, &h, 0);
@@ -772,9 +813,12 @@ mod tests {
 
     #[test]
     fn test_fat_chain_integrity() {
-        let large_data = vec![0xCC; 12288]; // 3 sectors (3 × 4096)
+        // Must be >= 4096 bytes (mini stream cutoff) to use regular sectors.
+        // 3 regular sectors = 3 × 512 = 1536 bytes, but that's below cutoff.
+        // Use 8 sectors (4096 bytes) to test regular sector chain.
+        let large_data = vec![0xCC; 4096]; // 8 sectors (8 × 512)
         let streams = vec![OleStream {
-            name: "ThreeSectors".to_string(),
+            name: "LargeStream".to_string(),
             data: large_data,
         }];
         let data = build_ole_file(&streams);
@@ -782,7 +826,7 @@ mod tests {
 
         let entry = parse_dir_entry(&data, &h, 1);
         let chain = follow_chain(&data, &h, entry.start_sector);
-        assert_eq!(chain.len(), 3, "Should span 3 sectors");
+        assert_eq!(chain.len(), 8, "Should span 8 sectors");
 
         // Verify chain is sequential (our writer uses contiguous sectors)
         for i in 0..chain.len() - 1 {
@@ -819,9 +863,10 @@ mod tests {
         let h = parse_header(&data);
         let base = HEADER_SIZE + h.first_dir_sector as usize * SECTOR_SIZE;
 
-        // CLSID is at offset 80 in the root directory entry
+        // CLSID is at offset 80 in the root directory entry.
+        // Must be set to the Windows Installer CLSID so msiexec recognizes the package.
         let clsid = &data[base + 80..base + 96];
-        assert_eq!(clsid, &MSI_CLSID, "Root entry must have MSI CLSID");
+        assert_eq!(clsid, &MSI_CLSID, "Root entry CLSID must be the MSI CLSID");
     }
 
     #[test]

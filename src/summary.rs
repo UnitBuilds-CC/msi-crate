@@ -11,7 +11,6 @@
 //!   size (4) + prop_count (4) + index entries (8 each) + padding + values
 
 use crate::error::Result;
-use crate::string_pool::StringPool;
 use chrono::{DateTime, Utc};
 use std::io::Write;
 
@@ -22,6 +21,7 @@ const VT_LPSTR: u32 = 30;
 const VT_FILETIME: u32 = 64;
 
 // Summary Information property IDs
+// Use standard OLE Property IDs (matching the msi crate reference).
 const PID_CODEPAGE: u32 = 1;
 const PID_TITLE: u32 = 2;
 const PID_SUBJECT: u32 = 3;
@@ -34,6 +34,9 @@ const PID_CREATE_TIME: u32 = 12;
 const PID_LAST_SAVE_TIME: u32 = 13;
 const PID_WORD_COUNT: u32 = 15;
 const PID_CREATING_APP: u32 = 18;
+const PID_LAST_AUTHOR: u32 = 8;
+const PID_SECURITY: u32 = 14;
+const PID_CATEGORY: u32 = 19;
 
 /// FMTID for Summary Information: {F29F85E0-4FF9-1068-AB91-08002B27B3D9}
 /// Mixed-endian UUID encoding (first 3 fields LE, last 2 fields BE).
@@ -55,12 +58,16 @@ pub struct SummaryInfo {
     pub rev_number: Option<String>,
     pub created: Option<DateTime<Utc>>,
     pub modified: Option<DateTime<Utc>>,
-    /// Code page (65001 for UTF-8)
+    /// Code page (1252 for Windows-1252)
     pub codepage: i32,
     /// Word count (2 for MSI packages)
     pub word_count: i32,
     /// Creating application string
     pub creating_app: Option<String>,
+    /// Security attribute (PID 14) - required for MSI. Default 405.
+    pub security: i32,
+    /// Category (PID 19)
+    pub category: Option<String>,
 }
 
 /// A property to be serialized into the OLE Property Set
@@ -79,6 +86,30 @@ impl Prop {
     }
 }
 
+/// Calculate the msi crate's size_including_padding for a property.
+/// This matches how Windows property set tools compute property sizes.
+fn msi_padded_size(prop: &Prop) -> u32 {
+    match prop.vtype {
+        VT_I2 => 8,
+        VT_I4 => 8,
+        VT_LPSTR => {
+            // msi crate formula: ((12 + string.len()) >> 2) << 2
+            // string.len() = length_field - 1 (length includes null)
+            if prop.data.len() >= 8 {
+                let len_with_null = u32::from_le_bytes([
+                    prop.data[4], prop.data[5], prop.data[6], prop.data[7]
+                ]);
+                let str_len = len_with_null.saturating_sub(1);
+                ((12 + str_len) >> 2) << 2
+            } else {
+                prop.data.len() as u32
+            }
+        }
+        VT_FILETIME => 12,
+        _ => prop.data.len() as u32,
+    }
+}
+
 impl SummaryInfo {
     /// Create a new SummaryInfo with MSI defaults
     pub fn new() -> Self {
@@ -92,9 +123,11 @@ impl SummaryInfo {
             rev_number: None,
             created: None,
             modified: None,
-            codepage: 1252, // Windows-1252 (standard MSI codepage)
+            codepage: 1252, // Windows-1252 (standard for MSI packages)
             word_count: 2,
             creating_app: None,
+            security: 405, // SF_REGISTRY | SF_SHORTCUTS (standard MSI security)
+            category: None,
         }
     }
 
@@ -151,6 +184,18 @@ impl SummaryInfo {
             props.push(Self::filetime_prop(PID_LAST_SAVE_TIME, dt));
         }
 
+        // PID 14: Security (VT_I4) - REQUIRED for MSI
+        props.push(Prop {
+            id: PID_SECURITY,
+            vtype: VT_I4,
+            data: {
+                let mut d = Vec::with_capacity(8);
+                d.write_all(&VT_I4.to_le_bytes())?;
+                d.write_all(&self.security.to_le_bytes())?;
+                d
+            },
+        });
+
         // PID 15: Word count (VT_I4)
         props.push(Prop {
             id: PID_WORD_COUNT,
@@ -167,63 +212,70 @@ impl SummaryInfo {
             props.push(Self::lpstr_prop(PID_CREATING_APP, s)?);
         }
 
+        if let Some(ref s) = self.category {
+            props.push(Self::lpstr_prop(PID_CATEGORY, s)?);
+        }
+
+        // Verify properties are in ascending PID order (required by MS-OLEPS spec)
+        debug_assert!(props.windows(2).all(|w| w[0].id < w[1].id),
+            "Properties must be in ascending PID order");
+
         let num_props = props.len() as u32;
 
         // === Property Set Header (48 bytes for 1 section) ===
         buf.write_all(&0xFFFEu16.to_le_bytes())?; // Byte order mark
         buf.write_all(&0x0000u16.to_le_bytes())?; // Format version (0 per MS-OLEPS spec)
-        buf.write_all(&6u16.to_le_bytes())?; // OS version (low word)
-        buf.write_all(&2u16.to_le_bytes())?; // OS version (high word, Win32=2)
+        // OS version: DWORD with major_ver (u8) + minor_ver (u8) + platform (u16)
+        // Windows 10.0, Win32 platform = 2
+        buf.write_all(&[10u8])?; // OS major version
+        buf.write_all(&[0u8])?;  // OS minor version
+        buf.write_all(&2u16.to_le_bytes())?; // Platform ID (2 = Win32)
         buf.write_all(&[0u8; 16])?; // CLSID (zeros)
         buf.write_all(&1u32.to_le_bytes())?; // Section count = 1
         buf.write_all(&FMTID)?; // FMTID (16 bytes)
         buf.write_all(&48u32.to_le_bytes())?; // Section offset = 48
 
         // === Build Section ===
-        // Calculate section size:
-        //   header (8) + index entries (8 * num_props) + values
+        // Use the msi crate's size formula for offset calculation.
+        // This matches how Windows tools compute property set layout.
         let index_end = 8 + num_props * 8;
-        let mut current_offset = index_end;
-        // Align to 4 bytes (should already be aligned since 8 + 8n is always 4-aligned)
-        current_offset = (current_offset + 3) & !3;
 
-        let mut section_size = current_offset;
+        // Calculate offsets using the msi crate's size_including_padding formula
+        let mut section_size = index_end;
+        let mut offsets: Vec<u32> = Vec::new();
         for prop in &props {
-            section_size += prop.padded_size();
+            offsets.push(section_size);
+            section_size += msi_padded_size(prop);
         }
 
         // Write section header
         buf.write_all(&section_size.to_le_bytes())?;
         buf.write_all(&num_props.to_le_bytes())?;
 
-        // Write property index entries with calculated offsets
-        let mut data_offset = current_offset;
-        for prop in &props {
+        // Write property index entries
+        for (i, prop) in props.iter().enumerate() {
             buf.write_all(&prop.id.to_le_bytes())?;
-            buf.write_all(&data_offset.to_le_bytes())?;
-            data_offset += prop.padded_size();
+            buf.write_all(&offsets[i].to_le_bytes())?;
         }
 
-        // Pad between index and values (if needed for alignment)
-        while (buf.len() - 48) < index_end as usize {
-            buf.push(0);
-        }
-        // Ensure 4-byte alignment from section start
-        while (buf.len() - 48) % 4 != 0 {
-            buf.push(0);
-        }
-
-        // Write property values
+        // Write property values with padding gaps to match offset calculation
         for prop in &props {
             buf.write_all(&prop.data)?;
+            // Pad to match the msi crate's size_including_padding
+            let msi_size = msi_padded_size(prop) as usize;
+            let actual = prop.data.len();
+            if msi_size > actual {
+                let gap = vec![0u8; msi_size - actual];
+                buf.write_all(&gap)?;
+            }
         }
 
         Ok(buf)
     }
 
-    /// Create a VT_LPSTR property
+    /// Create a VT_LPSTR property (encoded as Windows-1252)
     fn lpstr_prop(id: u32, s: &str) -> Result<Prop> {
-        let encoded = StringPool::encode(s)?;
+        let encoded = crate::string_pool::StringPool::encode_win1252(s);
         let str_len_with_null = (encoded.len() + 1) as u32;
         let mut data = Vec::with_capacity(16 + encoded.len());
         data.write_all(&VT_LPSTR.to_le_bytes())?; // type (4 bytes)
@@ -294,8 +346,8 @@ mod tests {
         // Section starts at offset 48
         let section_size = read_u32(&data, 48);
         let prop_count = read_u32(&data, 52);
-        // Minimal: codepage + word_count = 2 properties
-        assert_eq!(prop_count, 2);
+        // Minimal: codepage(1) + security(14) + word_count(15) = 3 properties
+        assert_eq!(prop_count, 3);
         // Section size should be > 0
         assert!(section_size > 16);
     }
@@ -316,9 +368,10 @@ mod tests {
         let data = si.serialize().unwrap();
 
         // Should have: codepage + title + subject + author + comments + template
-        //              + rev_number + created + modified + word_count + creating_app = 11 props
+        //              + rev_number + created + modified + security + word_count
+        //              + creating_app = 12 props (category not set in this test)
         let prop_count = read_u32(&data, 52);
-        assert_eq!(prop_count, 11, "Should have 11 properties");
+        assert_eq!(prop_count, 12, "Should have 12 properties");
 
         // Total size should be reasonable
         assert!(data.len() > 200, "Full property set should be > 200 bytes");

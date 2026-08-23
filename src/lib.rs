@@ -1,6 +1,6 @@
 //! velocity-msi - MSI package generator
 //!
-//! Creates Windows Installer (MSI) packages using a custom OLE V4 compound
+//! Creates Windows Installer (MSI) packages using a custom OLE V3 compound
 //! file writer and custom MSI table serialization.  No external dependencies
 //! for the OLE layer — the entire compound file is built from scratch.
 
@@ -10,12 +10,14 @@ mod string_pool;
 mod summary;
 mod table;
 pub mod validate;
+pub mod cabinet;
 
 pub use error::{MsiError, Result};
 pub use string_pool::StringPool;
 pub use summary::SummaryInfo;
 pub use table::{Column, ColumnType, Table, Value};
 pub use validate::{validate_ole, validate_msi_semantics, MsiSemanticReport, MsiValidationInfo};
+pub use cabinet::{CabinetFile, build_cabinet};
 
 use std::collections::BTreeMap;
 use std::io::Write;
@@ -23,7 +25,7 @@ use std::io::Write;
 /// MSI package builder
 ///
 /// Creates Windows Installer (MSI) databases by managing tables, string pools,
-/// and summary information, then assembling them into an OLE V4 compound file.
+/// and summary information, then assembling them into an OLE V3 compound file.
 ///
 /// # Example
 /// ```
@@ -51,6 +53,8 @@ pub struct MsiBuilder {
     long_string_refs: bool,
     /// Extra OLE streams to embed (e.g., cabinet files)
     extra_streams: Vec<ole::OleStream>,
+    /// Whether to include _Validation table (default: true)
+    include_validation: bool,
 }
 
 impl MsiBuilder {
@@ -71,10 +75,13 @@ impl MsiBuilder {
                 // Generate a pseudo-UUID for the Revision Number.
                 // msiexec REQUIRES this property (PID 9) to open the MSI.
                 s.rev_number = Some(Self::generate_uuid(&now));
+                // PID 14 (Security) defaults to 405 in SummaryInfo::new()
+                // PID 15 (WordCount) defaults to 2
                 s
             },
             long_string_refs: false,
             extra_streams: Vec::new(),
+            include_validation: true,
         }
     }
 
@@ -158,19 +165,69 @@ impl MsiBuilder {
         self.extra_streams.push(ole::OleStream { name, data });
     }
 
+    /// Disable _Validation table generation (for testing/debugging).
+    pub fn set_include_validation(&mut self, include: bool) {
+        self.include_validation = include;
+    }
+
     /// Build the MSI package and return the complete OLE compound file bytes.
     ///
     /// This creates system tables (_Tables, _Columns, _Validation), serializes
     /// all table data, builds the string pool, and assembles everything into
-    /// an OLE V4 compound file using our custom OLE writer.
+    /// an OLE V3 compound file using our custom OLE writer.
     pub fn build(&mut self) -> Result<Vec<u8>> {
         // Create system tables (interns all system strings)
         let mut all_tables = self.create_system_tables()?;
 
-        // Add user tables
-        for (name, table) in self.tables.iter() {
-            all_tables.insert(name.clone(), table.clone());
+        // Remove _Validation if disabled
+        if !self.include_validation {
+            all_tables.remove("_Validation");
         }
+
+        // Add user tables, filtering out any with 0 rows.
+        // Empty tables produce 0-byte streams which msiexec rejects.
+        for (name, table) in self.tables.iter() {
+            if table.row_count() > 0 {
+                all_tables.insert(name.clone(), table.clone());
+            }
+        }
+
+        // Add _Validation entries for user tables (skip empty tables)
+        if self.include_validation {
+            if let Some(validation) = all_tables.get_mut("_Validation") {
+                for (table_name, table) in &self.tables {
+                    if table.row_count() == 0 {
+                        continue;
+                    }
+                    for col in &table.columns {
+                        self.string_pool.intern(table_name);
+                        self.string_pool.intern(&col.name);
+                        let nullable = if col.nullable { "Y" } else { "N" };
+                        self.string_pool.intern(nullable);
+                        let category_val = col.category.as_ref().map(|c| {
+                            self.string_pool.intern(c);
+                            Value::Str(c.clone())
+                        });
+                        validation.add_row(vec![
+                            Value::Str(table_name.clone()),
+                            Value::Str(col.name.clone()),
+                            Value::Str(nullable.to_string()),
+                            Value::Null, Value::Null, Value::Null, Value::Null,
+                            category_val.unwrap_or(Value::Null), Value::Null, Value::Null,
+                        ])?;
+                    }
+                }
+            }
+        }
+
+        // Populate _Tables and _Columns with entries for ALL tables
+        Self::populate_system_table_metadata(&mut all_tables, &mut self.string_pool)?;
+
+        // Reindex the string pool so IDs are assigned in alphabetical order.
+        // This must happen after ALL interning but before ANY serialization.
+        // The msi crate reference uses BTreeMap which naturally assigns IDs
+        // in alphabetical order. We match that behavior here.
+        self.string_pool.reindex();
 
         // Collect all streams
         let mut ole_streams: Vec<ole::OleStream> = Vec::new();
@@ -204,214 +261,224 @@ impl MsiBuilder {
         });
 
         // Extra streams (cabinets, etc.)
+        // Cabinet/binary streams are encoded with is_table=false (no TABLE_PREFIX),
+        // matching the msi crate's write_stream() behavior.
         for stream in &self.extra_streams {
             ole_streams.push(ole::OleStream {
-                name: stream.name.clone(),
+                name: encode_stream_name(&stream.name, false),
                 data: stream.data.clone(),
             });
         }
 
-        // Build the OLE compound file using our custom OLE V4 writer
+        // Build the OLE compound file using our custom V3 writer.
+        // This is 100% in-house with no external OLE dependencies.
+        // The custom writer produces V3 format (512-byte sectors) as required by MSI.
+        // The MSI CLSID is set on the root directory entry so msiexec recognizes the package.
         Ok(ole::build_ole_file(&ole_streams))
     }
 
     /// Create the system tables (_Tables, _Columns, _Validation)
+    ///
+    /// Per the msi crate reference implementation:
+    /// - _Tables and _Columns are created directly (not via create_table),
+    ///   so they do NOT get _Validation entries.
+    /// - _Validation IS created via create_table, so it gets _Validation entries
+    ///   AND is listed in the _Tables table.
+    /// - _Columns entries for ALL tables (system + user) are added in build()
+    ///   after all tables are known.
     fn create_system_tables(&mut self) -> Result<BTreeMap<String, Table>> {
         let mut system_tables = BTreeMap::new();
 
-        // _Tables - list of all user table names
-        let mut tables_table = Table::new(
+        // _Tables - starts empty; table names are added in build()
+        let tables_table = Table::new(
             "_Tables",
             vec![Column::build("Name").string(64).primary_key().build()],
             self.long_string_refs,
         );
-        for name in self.tables.keys() {
-            self.string_pool.intern(name);
-            tables_table.add_row(vec![Value::Str(name.clone())])?;
-        }
         system_tables.insert("_Tables".to_string(), tables_table);
 
-        // _Columns - column metadata for all user tables
-        let mut columns_table = Table::new(
+        // _Columns - starts empty; column defs are added in build()
+        // Per msi crate reference: PK = (Table, Number), Name is NOT PK.
+        let columns_table = Table::new(
             "_Columns",
             vec![
                 Column::build("Table").string(64).primary_key().build(),
                 Column::build("Number").int16().primary_key().build(),
-                Column::build("Name").string(64).primary_key().build(),
+                Column::build("Name").string(64).build(),
                 Column::build("Type").int16().build(),
             ],
             self.long_string_refs,
         );
-        for (table_name, table) in &self.tables {
-            for (col_num, col) in table.columns.iter().enumerate() {
-                self.string_pool.intern(table_name);
-                self.string_pool.intern(&col.name);
-                columns_table.add_row(vec![
-                    Value::Str(table_name.clone()),
-                    Value::Int((col_num + 1) as i32),
-                    Value::Str(col.name.clone()),
-                    Value::Int(col.bitfield()),
-                ])?;
-            }
-        }
         system_tables.insert("_Columns".to_string(), columns_table);
 
-        // _Validation - validation rules for all table columns (including system tables)
+        // _Validation - validation rules for _Validation and user tables.
+        // NOTE: _Tables and _Columns do NOT get _Validation entries
+        // (matching the msi crate's behavior where they bypass create_table).
+        // Column sizes match the msi crate's make_validation_columns():
+        //   Table/Column use id_string(32), not string(64).
         let mut validation_table = Table::new(
             "_Validation",
             vec![
-                Column::build("Table").string(64).primary_key().build(),
-                Column::build("Column").string(64).primary_key().build(),
+                Column::build("Table").string(32).primary_key().category("Identifier").build(),
+                Column::build("Column").string(32).primary_key().category("Identifier").build(),
                 Column::build("Nullable").string(4).build(),
                 Column::build("MinValue").int32().nullable().build(),
                 Column::build("MaxValue").int32().nullable().build(),
-                Column::build("KeyTable").string(255).nullable().build(),
+                Column::build("KeyTable").string(255).nullable().category("Identifier").build(),
                 Column::build("KeyColumn").int16().nullable().build(),
                 Column::build("Category").string(32).nullable().build(),
-                Column::build("Set").string(255).nullable().build(),
-                Column::build("Description").string(255).nullable().build(),
+                Column::build("Set").string(255).nullable().category("Text").build(),
+                Column::build("Description").string(255).nullable().category("Text").build(),
             ],
             self.long_string_refs,
         );
-        
-        // Add validation entries for system tables
-        // _Tables table
-        self.string_pool.intern("_Tables");
-        self.string_pool.intern("Name");
-        self.string_pool.intern("N");
-        validation_table.add_row(vec![
-            Value::Str("_Tables".to_string()),
-            Value::Str("Name".to_string()),
-            Value::Str("N".to_string()),
-            Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null,
-        ])?;
-        
-        // _Columns table
-        self.string_pool.intern("_Columns");
-        self.string_pool.intern("Table");
-        self.string_pool.intern("Number");
-        self.string_pool.intern("Type");
-        validation_table.add_row(vec![
-            Value::Str("_Columns".to_string()),
-            Value::Str("Table".to_string()),
-            Value::Str("N".to_string()),
-            Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null,
-        ])?;
-        validation_table.add_row(vec![
-            Value::Str("_Columns".to_string()),
-            Value::Str("Number".to_string()),
-            Value::Str("N".to_string()),
-            Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null,
-        ])?;
-        validation_table.add_row(vec![
-            Value::Str("_Columns".to_string()),
-            Value::Str("Name".to_string()),
-            Value::Str("N".to_string()),
-            Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null,
-        ])?;
-        validation_table.add_row(vec![
-            Value::Str("_Columns".to_string()),
-            Value::Str("Type".to_string()),
-            Value::Str("N".to_string()),
-            Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null,
-        ])?;
-        
-        // _Validation table (10 columns)
+
+        // _Validation entries for the _Validation table itself
+        // Categories and Set values match the msi crate's make_validation_columns()
         self.string_pool.intern("_Validation");
+        self.string_pool.intern("Table");
         self.string_pool.intern("Column");
         self.string_pool.intern("Nullable");
-        self.string_pool.intern("Description");
         self.string_pool.intern("MinValue");
         self.string_pool.intern("MaxValue");
         self.string_pool.intern("KeyTable");
         self.string_pool.intern("KeyColumn");
         self.string_pool.intern("Category");
         self.string_pool.intern("Set");
+        self.string_pool.intern("Description");
+        self.string_pool.intern("N");
+        self.string_pool.intern("Y");
+        // Category names used in _Validation entries
+        self.string_pool.intern("Identifier");
+        self.string_pool.intern("Text");
+        // Set values for Nullable column
+        self.string_pool.intern("Y;N");
+        // Full list of valid categories for the Category column's Set
+        let all_categories = "Text;UpperCase;LowerCase;Integer;DoubleInteger;TimeDate;Identifier;Property;Filename;WildCardFilename;Path;Paths;AnyPath;DefaultDir;RegPath;Formatted;FormattedSDDLText;Template;Condition;GUID;Version;Language;Binary;CustomSource;Cabinet;Shortcut";
+        self.string_pool.intern(all_categories);
+
+        // _Validation.Table: id_string(32) → category=Identifier
         validation_table.add_row(vec![
             Value::Str("_Validation".to_string()),
             Value::Str("Table".to_string()),
             Value::Str("N".to_string()),
-            Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null,
+            Value::Null, Value::Null, Value::Null, Value::Null,
+            Value::Str("Identifier".to_string()), Value::Null, Value::Null,
         ])?;
+        // _Validation.Column: id_string(32) → category=Identifier
         validation_table.add_row(vec![
             Value::Str("_Validation".to_string()),
             Value::Str("Column".to_string()),
             Value::Str("N".to_string()),
-            Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null,
+            Value::Null, Value::Null, Value::Null, Value::Null,
+            Value::Str("Identifier".to_string()), Value::Null, Value::Null,
         ])?;
+        // _Validation.Nullable: enum_values(["Y","N"]) → Set="Y;N"
         validation_table.add_row(vec![
             Value::Str("_Validation".to_string()),
             Value::Str("Nullable".to_string()),
             Value::Str("N".to_string()),
-            Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null,
+            Value::Null, Value::Null, Value::Null, Value::Null,
+            Value::Null, Value::Str("Y;N".to_string()), Value::Null,
         ])?;
+        // _Validation.MinValue: nullable int32
         validation_table.add_row(vec![
             Value::Str("_Validation".to_string()),
             Value::Str("MinValue".to_string()),
             Value::Str("Y".to_string()),
             Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null,
         ])?;
+        // _Validation.MaxValue: nullable int32
         validation_table.add_row(vec![
             Value::Str("_Validation".to_string()),
             Value::Str("MaxValue".to_string()),
             Value::Str("Y".to_string()),
             Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null,
         ])?;
+        // _Validation.KeyTable: id_string(255) → category=Identifier
         validation_table.add_row(vec![
             Value::Str("_Validation".to_string()),
             Value::Str("KeyTable".to_string()),
             Value::Str("Y".to_string()),
-            Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null,
+            Value::Null, Value::Null, Value::Null, Value::Null,
+            Value::Str("Identifier".to_string()), Value::Null, Value::Null,
         ])?;
+        // _Validation.KeyColumn: nullable int16
         validation_table.add_row(vec![
             Value::Str("_Validation".to_string()),
             Value::Str("KeyColumn".to_string()),
             Value::Str("Y".to_string()),
             Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null,
         ])?;
+        // _Validation.Category: enum_values(all_categories) → Set=long list
         validation_table.add_row(vec![
             Value::Str("_Validation".to_string()),
             Value::Str("Category".to_string()),
             Value::Str("Y".to_string()),
-            Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null,
+            Value::Null, Value::Null, Value::Null, Value::Null,
+            Value::Null, Value::Str(all_categories.to_string()), Value::Null,
         ])?;
+        // _Validation.Set: text_string(255) → category=Text
         validation_table.add_row(vec![
             Value::Str("_Validation".to_string()),
             Value::Str("Set".to_string()),
             Value::Str("Y".to_string()),
-            Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null,
+            Value::Null, Value::Null, Value::Null, Value::Null,
+            Value::Str("Text".to_string()), Value::Null, Value::Null,
         ])?;
+        // _Validation.Description: text_string(255) → category=Text
         validation_table.add_row(vec![
             Value::Str("_Validation".to_string()),
             Value::Str("Description".to_string()),
             Value::Str("Y".to_string()),
-            Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null,
+            Value::Null, Value::Null, Value::Null, Value::Null,
+            Value::Str("Text".to_string()), Value::Null, Value::Null,
         ])?;
-        
-        // Add validation entries for user tables
-        for (table_name, table) in &self.tables {
-            for col in &table.columns {
-                self.string_pool.intern(table_name);
-                self.string_pool.intern(&col.name);
-                let nullable = if col.nullable { "Y" } else { "N" };
-                self.string_pool.intern(nullable);
-                validation_table.add_row(vec![
-                    Value::Str(table_name.clone()),
-                    Value::Str(col.name.clone()),
-                    Value::Str(nullable.to_string()),
-                    Value::Null,
-                    Value::Null,
-                    Value::Null,
-                    Value::Null,
-                    Value::Null,
-                    Value::Null,
-                    Value::Null,
-                ])?;
-            }
-        }
+
         system_tables.insert("_Validation".to_string(), validation_table);
 
         Ok(system_tables)
+    }
+
+    /// Populate _Tables and _Columns with entries for user tables + _Validation.
+    /// _Tables and _Columns themselves are NOT listed (matching msi crate behavior).
+    fn populate_system_table_metadata(
+        all_tables: &mut BTreeMap<String, Table>,
+        string_pool: &mut StringPool,
+    ) -> Result<()> {
+        // Collect table names and column definitions for user tables + _Validation only
+        // _Tables and _Columns must NOT list themselves (they are metadata-only).
+        let table_info: Vec<(String, Vec<Column>)> = all_tables
+            .iter()
+            .filter(|(name, _)| *name != "_Tables" && *name != "_Columns")
+            .map(|(name, table)| (name.clone(), table.columns.clone()))
+            .collect();
+
+        // Add ALL table names to _Tables
+        if let Some(tables_table) = all_tables.get_mut("_Tables") {
+            for (name, _) in &table_info {
+                string_pool.intern(name);
+                tables_table.add_row(vec![Value::Str(name.clone())])?;
+            }
+        }
+
+        // Add column definitions for ALL tables to _Columns
+        if let Some(columns_table) = all_tables.get_mut("_Columns") {
+            for (table_name, columns) in &table_info {
+                for (col_num, col) in columns.iter().enumerate() {
+                    string_pool.intern(table_name);
+                    string_pool.intern(&col.name);
+                    columns_table.add_row(vec![
+                        Value::Str(table_name.clone()),
+                        Value::Int((col_num + 1) as i32),
+                        Value::Str(col.name.clone()),
+                        Value::Int(col.bitfield()),
+                    ])?;
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Build string pool data: returns (pool_name, pool_data, data_name, data_bytes)
@@ -423,36 +490,38 @@ impl MsiBuilder {
     /// _StringData format:
     ///   Concatenated encoded string bytes in ID order (1-based, ID 0 = null)
     fn build_string_pool(&self) -> Result<(String, Vec<u8>, String, Vec<u8>)> {
-        let mut strings: Vec<_> = self.string_pool.iter().collect();
-        strings.sort_by_key(|&(_, id, _)| id);
+        // After reindex(), BTreeMap iterates in alphabetical order which
+        // equals ID order (IDs assigned sequentially in alphabetical order).
+        let strings: Vec<_> = self.string_pool.iter().collect();
 
-        let win1252 = encoding_rs::WINDOWS_1252;
-
-        // _StringPool stream
+        // Use Windows-1252 codepage (1252) - standard for MSI packages.
         let mut pool_data = Vec::new();
         // Header: codepage in low 16 bits, long string refs flag at bit 31
-        let mut header: u32 = 1252; // Windows-1252 (standard MSI codepage)
+        let mut header: u32 = 1252; // Windows-1252 codepage
         if self.string_pool.long_string_refs() {
             header |= 0x80000000;
         }
         pool_data.write_all(&header.to_le_bytes())?;
         for (text, _id, refcount) in &strings {
-            let (encoded, _, _had_errors) = win1252.encode(text);
-            // Entry: u16 length + u16 refcount (4 bytes per entry)
-            pool_data.write_all(&(encoded.len() as u16).to_le_bytes())?;
+            let encoded = StringPool::encode_win1252(text);
+            // Entry: u16 length + u16 refcount
+            // Per msi crate reference: length = encoded byte count (NO null terminator)
+            let len = encoded.len() as u16;
+            pool_data.write_all(&len.to_le_bytes())?;
             pool_data.write_all(&((*refcount).min(0xFFFF) as u16).to_le_bytes())?;
         }
 
-        // _StringData stream - encoded string bytes in ID order
+        // _StringData stream - concatenated encoded strings in ID order.
+        // Per msi crate reference: NO null terminators between strings.
+        // The length field in _StringPool = exact encoded byte count.
         let mut string_data = Vec::new();
         for (text, _id, _refcount) in &strings {
-            let (encoded, _, _) = win1252.encode(text);
-            string_data.write_all(&encoded)?;
+            string_data.write_all(&StringPool::encode_win1252(text))?;
         }
 
-        // The Windows Installer uses specific obfuscated names for the string pool streams.
-        let pool_name = "\u{4840}\u{3F3F}\u{4577}\u{446C}\u{3E6A}\u{44B2}\u{482F}".to_string();
-        let data_name = "\u{4840}\u{3F3F}\u{4577}\u{446C}\u{3B6A}\u{45E4}\u{4824}".to_string();
+        // Use the standard stream name encoding (same as msi crate reference)
+        let pool_name = encode_stream_name("_StringPool", true);
+        let data_name = encode_stream_name("_StringData", true);
 
         Ok((pool_name, pool_data, data_name, string_data))
     }
@@ -546,12 +615,9 @@ mod tests {
 
     #[test]
     fn test_encode_stream_name() {
-        let tables_enc = encode_stream_name("_Tables", true);
-        let cols_enc = encode_stream_name("_Columns", true);
-        let val_enc = encode_stream_name("_Validation", true);
-        eprintln!("_Tables encoded: {:?} ({} chars)", tables_enc, tables_enc.chars().count());
-        eprintln!("_Columns encoded: {:?} ({} chars)", cols_enc, cols_enc.chars().count());
-        eprintln!("_Validation encoded: {:?} ({} chars)", val_enc, val_enc.chars().count());
+        let _tables_enc = encode_stream_name("_Tables", true);
+        let _cols_enc = encode_stream_name("_Columns", true);
+        let _val_enc = encode_stream_name("_Validation", true);
         assert_eq!(
             encode_stream_name("_Columns", true),
             "\u{4840}\u{3b3f}\u{43f2}\u{4438}\u{45b1}"
