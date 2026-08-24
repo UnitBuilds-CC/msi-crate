@@ -49,10 +49,12 @@ struct OleWriter {
     mini_stream: Vec<u8>,       // concatenated mini stream data
     // Sector layout
     num_fat_sectors: usize,
+    num_difat_sectors: usize,   // DIFAT sectors for >109 FAT sectors
     num_dir_sectors: usize,
     num_minifat_sectors: usize,
     mini_stream_sectors: usize,
     first_fat_sector: usize,
+    first_difat_sector: usize,
     first_dir_sector: usize,
     first_minifat_sector: usize,
     first_mini_sector: usize,
@@ -72,10 +74,12 @@ impl OleWriter {
             start_sector: vec![0; n + 1],
             mini_stream: Vec::new(),
             num_fat_sectors: 1,
+            num_difat_sectors: 0,
             num_dir_sectors: 1,
             num_minifat_sectors: 1,
             mini_stream_sectors: 0,
             first_fat_sector: 0,
+            first_difat_sector: 0,
             first_dir_sector: 0,
             first_minifat_sector: 0,
             first_mini_sector: 0,
@@ -155,8 +159,12 @@ impl OleWriter {
         let total_mini_sectors = mini_total.div_ceil(MINI_SECTOR_SIZE);
         self.num_minifat_sectors = (total_mini_sectors.max(1)).div_ceil(mini_entries_per_minifat);
 
-        // Iteratively compute sector layout
-        // Layout: [FAT sectors] [dir sectors] [minifat sectors] [mini stream] [large stream data]
+        // Iteratively compute sector layout including DIFAT sectors.
+        // Layout: [FAT sectors] [DIFAT sectors] [dir sectors] [minifat sectors] [mini stream] [large stream data]
+        //
+        // DIFAT (Double Indirect FAT) is needed when we have more than 109 FAT sectors.
+        // The header DIFAT array holds 109 entries; overflow goes into DIFAT sectors.
+        // Each DIFAT sector holds 127 FAT sector indices + 1 next-DIFAT pointer.
         loop {
             let fixed = self.num_fat_sectors + self.num_dir_sectors + self.num_minifat_sectors;
             let variable = self.mini_stream_sectors + large_total;
@@ -170,14 +178,26 @@ impl OleWriter {
             let needed_dir = self.names.len().div_ceil(ENTRIES_PER_DIR_SECTOR);
 
             if needed_fat == self.num_fat_sectors && needed_dir == self.num_dir_sectors {
-                // Layout is stable
+                // Layout is stable - calculate DIFAT requirements
+                if needed_fat > DIFAT_IN_HEADER {
+                    let overflow = needed_fat - DIFAT_IN_HEADER;
+                    let difat_entries_per_sector = SECTOR_SIZE / 4 - 1; // 127
+                    self.num_difat_sectors = overflow.div_ceil(difat_entries_per_sector);
+                } else {
+                    self.num_difat_sectors = 0;
+                }
+
+                // Assign sector positions
+                // Layout: [FAT] [DIFAT] [DIR] [MINIFAT] [MINI STREAM] [LARGE STREAMS]
                 self.first_fat_sector = 0;
-                self.first_dir_sector = self.num_fat_sectors;
+                self.first_difat_sector = self.num_fat_sectors;
+                self.first_dir_sector = self.num_fat_sectors + self.num_difat_sectors;
                 self.first_minifat_sector = self.first_dir_sector + self.num_dir_sectors;
                 self.first_mini_sector = self.first_minifat_sector + self.num_minifat_sectors;
 
                 // Assign regular sectors to large streams
                 let mut next_sector = self.first_mini_sector + self.mini_stream_sectors;
+                self.large_streams.clear();
                 for i in 1..self.names.len() {
                     if !self.is_mini[i] {
                         self.start_sector[i] = next_sector as u32;
@@ -233,8 +253,10 @@ impl OleWriter {
         file[o..o + 4].copy_from_slice(&MINI_STREAM_CUTOFF.to_le_bytes()); o += 4;
         file[o..o + 4].copy_from_slice(&(self.first_minifat_sector as u32).to_le_bytes()); o += 4;
         file[o..o + 4].copy_from_slice(&(self.num_minifat_sectors as u32).to_le_bytes()); o += 4;
-        file[o..o + 4].copy_from_slice(&FREE_SECT.to_le_bytes()); o += 4; // first DIFAT (none → FREE_SECT per MS-CFB)
-        file[o..o + 4].copy_from_slice(&0u32.to_le_bytes()); o += 4; // DIFAT count
+        // DIFAT: first sector and count
+        let first_difat = if self.num_difat_sectors > 0 { self.first_difat_sector as u32 } else { FREE_SECT };
+        file[o..o + 4].copy_from_slice(&first_difat.to_le_bytes()); o += 4;
+        file[o..o + 4].copy_from_slice(&(self.num_difat_sectors as u32).to_le_bytes()); o += 4;
         // DIFAT array: first N entries are FAT sector numbers, rest must be FREE_SECT
         for i in 0..DIFAT_IN_HEADER {
             let val = if i < self.num_fat_sectors {
@@ -259,6 +281,14 @@ impl OleWriter {
         // Mark FAT sectors as FATSECT
         for i in 0..self.num_fat_sectors {
             let off = self.sector_offset(self.first_fat_sector + i);
+            let idx = i * (SECTOR_SIZE / 4);
+            let fat_off = off + idx * 4;
+            file[fat_off..fat_off + 4].copy_from_slice(&FATSECT.to_le_bytes());
+        }
+
+        // Mark DIFAT sectors as FATSECT
+        for i in 0..self.num_difat_sectors {
+            let off = self.sector_offset(self.first_difat_sector + i);
             let idx = i * (SECTOR_SIZE / 4);
             let fat_off = off + idx * 4;
             file[fat_off..fat_off + 4].copy_from_slice(&FATSECT.to_le_bytes());
@@ -312,6 +342,38 @@ impl OleWriter {
                     ENDOFCHAIN
                 };
                 file[fat_off..fat_off + 4].copy_from_slice(&val.to_le_bytes());
+            }
+        }
+
+        // Write DIFAT sectors (containing FAT sector indices)
+        if self.num_difat_sectors > 0 {
+            let difat_entries_per_sector = SECTOR_SIZE / 4 - 1; // 127
+
+            for d in 0..self.num_difat_sectors {
+                let base = self.sector_offset(self.first_difat_sector + d);
+
+                // Initialize entire DIFAT sector to FREE_SECT
+                for j in (0..SECTOR_SIZE).step_by(4) {
+                    file[base + j..base + j + 4].copy_from_slice(&FREE_SECT.to_le_bytes());
+                }
+
+                // Fill DIFAT entries with FAT sector indices
+                let start_idx = DIFAT_IN_HEADER + d * difat_entries_per_sector;
+                let end_idx = (start_idx + difat_entries_per_sector).min(self.num_fat_sectors);
+
+                for i in start_idx..end_idx {
+                    let entry_off = base + (i - start_idx) * 4;
+                    file[entry_off..entry_off + 4].copy_from_slice(&((self.first_fat_sector + i) as u32).to_le_bytes());
+                }
+
+                // Next DIFAT sector pointer (last entry in the sector)
+                let next_difat = if d + 1 < self.num_difat_sectors {
+                    (self.first_difat_sector + d + 1) as u32
+                } else {
+                    ENDOFCHAIN
+                };
+                let next_off = base + difat_entries_per_sector * 4;
+                file[next_off..next_off + 4].copy_from_slice(&next_difat.to_le_bytes());
             }
         }
     }
@@ -909,5 +971,69 @@ mod tests {
         let entry = parse_dir_entry(&data, &h, 1);
         assert_eq!(entry.name, "Empty");
         assert_eq!(entry.stream_size, 0);
+    }
+
+    #[test]
+    fn test_large_file_with_difat() {
+        // Test with a stream that requires DIFAT sectors (>109 FAT sectors).
+        // 109 FAT sectors * 128 entries * 512 bytes = ~6.83 MB
+        // So we need >6.83 MB to trigger DIFAT. Use 8 MB to be safe.
+        let large_data = vec![0xAB; 8 * 1024 * 1024]; // 8 MB
+        let streams = vec![OleStream {
+            name: "LargeFile".to_string(),
+            data: large_data.clone(),
+        }];
+        let data = build_ole_file(&streams);
+        let h = parse_header(&data);
+
+        // Verify header
+        assert_eq!(h.major_version, 3);
+        assert!(h.num_fat_sectors > DIFAT_IN_HEADER as u32, "Should need >109 FAT sectors");
+        assert!(h.num_fat_sectors >= 128, "8MB needs at least 128 FAT sectors");
+
+        // Verify DIFAT is present
+        let difat_count = read_u32(&data, 68); // DIFAT count at offset 68
+        assert!(difat_count > 0, "Should have DIFAT sectors");
+
+        let first_difat = read_u32(&data, 64); // First DIFAT sector at offset 64
+        assert_ne!(first_difat, FREE_SECT, "First DIFAT sector should be set");
+
+        // Verify the stream can be read back
+        let entry = parse_dir_entry(&data, &h, 1);
+        assert_eq!(entry.name, "LargeFile");
+        assert_eq!(entry.stream_size, 8 * 1024 * 1024);
+
+        let recovered = read_stream_data(&data, &h, entry.start_sector, entry.stream_size as usize);
+        assert_eq!(recovered.len(), large_data.len());
+        assert_eq!(recovered, large_data);
+    }
+
+    #[test]
+    fn test_very_large_file_50mb() {
+        // Test with 50 MB to verify DIFAT works for large payloads
+        let large_data = vec![0xCD; 50 * 1024 * 1024]; // 50 MB
+        let streams = vec![OleStream {
+            name: "VeryLargeFile".to_string(),
+            data: large_data.clone(),
+        }];
+        let data = build_ole_file(&streams);
+        let h = parse_header(&data);
+
+        // Verify header
+        assert_eq!(h.major_version, 3);
+        assert!(h.num_fat_sectors > DIFAT_IN_HEADER as u32, "50MB needs DIFAT");
+
+        // Verify DIFAT
+        let difat_count = read_u32(&data, 68);
+        assert!(difat_count > 0, "Should have DIFAT sectors");
+
+        // Verify the stream
+        let entry = parse_dir_entry(&data, &h, 1);
+        assert_eq!(entry.name, "VeryLargeFile");
+        assert_eq!(entry.stream_size, 50 * 1024 * 1024);
+
+        let recovered = read_stream_data(&data, &h, entry.start_sector, entry.stream_size as usize);
+        assert_eq!(recovered.len(), large_data.len());
+        assert_eq!(recovered, large_data);
     }
 }
