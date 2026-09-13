@@ -2,11 +2,11 @@
 
 Clean-room MSI (Windows Installer) package generator written in Rust.
 
-Creates Windows Installer packages with a from-scratch OLE V4 compound file writer. **No dependency on `cfb`, `msi`, or `rust-msi` crates.**
+Creates Windows Installer packages with a from-scratch OLE V3 compound file writer. **No dependency on `cfb`, `msi`, or `rust-msi` crates.**
 
 ## Features
 
-- **From-scratch OLE V4 writer** — generates MS-CFB (Compound Binary File) format with 4096-byte sectors
+- **From-scratch OLE V3 writer** — generates MS-CFB (Compound Binary File) format with 512-byte sectors
 - **MSI database generation** — creates system tables (_Tables, _Columns, _Validation), string pool, and SummaryInformation
 - **Cabinet embedding** — embed MS-ZIP cabinet files as OLE streams
 - **Stream name encoding** — MSI base-64 Unicode encoding for table streams
@@ -17,10 +17,11 @@ Creates Windows Installer packages with a from-scratch OLE V4 compound file writ
 
 ```
 velocity-msi/
-├── ole.rs          — OLE V4 compound file writer (MS-CFB)
+├── ole.rs          — OLE V3 compound file writer (MS-CFB, 512-byte sectors)
 ├── string_pool.rs  — String interning with Windows-1252 encoding
 ├── table.rs        — Table schema, column types, and serialization
 ├── summary.rs      — SummaryInformation (OLE Property Set format)
+├── cabinet.rs      — MSCF cabinet builder with MSZIP compression
 ├── validate.rs     — OLE structure reader for validation
 ├── error.rs        — Error types
 └── lib.rs          — MsiBuilder orchestration API
@@ -71,10 +72,10 @@ println!("Streams: {:?}", info.stream_names);
 println!("Tables: {:?}", info.table_streams);
 ```
 
-## OLE V4 Format
+## OLE V3 Format
 
-The OLE writer produces V4 compound files with:
-- 4096-byte sectors
+The OLE writer produces V3 compound files with:
+- 512-byte sectors (required by Windows Installer)
 - 64-byte mini-sectors
 - Mini-stream for data < 4096 bytes
 - Regular sector chains for data >= 4096 bytes
@@ -91,12 +92,12 @@ cargo test -p velocity-msi
 ```
 
 The test suite includes:
-- 13 OLE writer tests (header, FAT chains, directory, mini/large streams)
-- 5 SummaryInformation tests
-- 12 table serialization tests
-- 6 validation tests
-- 3 string pool tests
-- 2 integration tests
+- 51 unit tests (OLE writer, cabinet, summary, tables, string pool, validation)
+- 27 comprehensive validation tests (DIFAT pointers, mini-stream boundaries, FAT/MiniFAT chains, directory BST, cabinet round-trip, stress tests, cross-validation with msi crate)
+- 9 cross-validation tests (independent verification with cfb crate)
+- 1 doc test
+
+All 88 tests pass.
 
 ## License
 
