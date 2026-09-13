@@ -1,5 +1,9 @@
 # velocity-msi
 
+[![crates.io](https://img.shields.io/crates/v/velocity-msi.svg)](https://crates.io/crates/velocity-msi)
+[![docs.rs](https://docs.rs/velocity-msi/badge.svg)](https://docs.rs/velocity-msi)
+[![github](https://img.shields.io/badge/github-UnitBuilds/msi--crate-8da0cb)](https://github.com/UnitBuilds-CC/msi-crate)
+
 Clean-room MSI (Windows Installer) package generator written in Rust.
 
 Creates Windows Installer packages with a from-scratch OLE V3 compound file writer. **No dependency on `cfb`, `msi`, or `rust-msi` crates.**
