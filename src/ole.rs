@@ -254,7 +254,7 @@ impl OleWriter {
         file[o..o + 4].copy_from_slice(&(self.first_minifat_sector as u32).to_le_bytes()); o += 4;
         file[o..o + 4].copy_from_slice(&(self.num_minifat_sectors as u32).to_le_bytes()); o += 4;
         // DIFAT: first sector and count
-        let first_difat = if self.num_difat_sectors > 0 { self.first_difat_sector as u32 } else { FREE_SECT };
+        let first_difat = if self.num_difat_sectors > 0 { self.first_difat_sector as u32 } else { ENDOFCHAIN };
         file[o..o + 4].copy_from_slice(&first_difat.to_le_bytes()); o += 4;
         file[o..o + 4].copy_from_slice(&(self.num_difat_sectors as u32).to_le_bytes()); o += 4;
         // DIFAT array: first N entries are FAT sector numbers, rest must be FREE_SECT
