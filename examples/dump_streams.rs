@@ -113,7 +113,7 @@ fn main() {
             for j in 0..16 {
                 if row + j < data.len() {
                     let b = data[row + j];
-                    if b >= 0x20 && b < 0x7f {
+                    if (0x20..0x7f).contains(&b) {
                         print!("{}", b as char);
                     } else {
                         print!(".");

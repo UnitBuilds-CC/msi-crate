@@ -1,7 +1,7 @@
 /// Test: Complete MSI with File/Media tables using ONLY velocity-msi
 /// cargo run --example velocity_complete_test -p velocity-msi
-use std::io::{Cursor, Write};
-use velocity_msi::{Column, MsiBuilder, Value, CabinetFile, build_cabinet};
+use std::io::Cursor;
+use velocity_msi::{Column, MsiBuilder, Value};
 
 fn make_uuid() -> String {
     let t = std::time::SystemTime::now()
@@ -186,7 +186,7 @@ fn main() {
     // Test with msiexec
     println!("\nTesting with msiexec...");
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", path, "/qn", "/l*v", log_path])
+        .args(["/i", path, "/qn", "/l*v", log_path])
         .output().unwrap();
     let ec = output.status.code().unwrap_or(-1);
     println!("Exit code: {}", ec);
@@ -208,7 +208,7 @@ fn main() {
         // Uninstall
         println!("\nUninstalling...");
         let uninst = std::process::Command::new("msiexec")
-            .args(&["/x", &pc, "/qn"]).output().unwrap();
+            .args(["/x", &pc, "/qn"]).output().unwrap();
         println!("Uninstall exit: {}", uninst.status.code().unwrap_or(-1));
         // Verify cleanup
         if !std::path::Path::new(install_dir).exists() {

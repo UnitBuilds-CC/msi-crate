@@ -25,7 +25,7 @@ fn test_msi(label: &str, builder: &mut MsiBuilder) {
     std::fs::write(&out, &data).unwrap();
     
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", &out, "/qn", "/norestart", "/l*v", &log])
+        .args(["/i", &out, "/qn", "/norestart", "/l*v", &log])
         .output()
         .unwrap();
     let code = output.status.code().unwrap_or(-1);
@@ -44,7 +44,7 @@ fn test_msi(label: &str, builder: &mut MsiBuilder) {
     
     // Cleanup
     let _ = std::process::Command::new("msiexec")
-        .args(&["/x", &out, "/qn", "/norestart"])
+        .args(["/x", &out, "/qn", "/norestart"])
         .output();
 }
 

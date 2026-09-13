@@ -51,7 +51,7 @@ fn main() {
     let expand_dir = format!("{}\\expand_out", test_dir);
     std::fs::create_dir_all(&expand_dir).ok();
     let status = Command::new("expand")
-        .args(&[&cab_path, &expand_dir, "-F:*"])
+        .args([&cab_path, &expand_dir, "-F:*"])
         .output();
     match status {
         Ok(output) => {
@@ -223,7 +223,7 @@ fn main() {
 
         let log_path = format!("{}\\external.log", test_dir);
         let status = Command::new("msiexec")
-            .args(&[
+            .args([
                 "/i", &msi_path, "/qn", "/norestart",
                 "/l*v", &log_path,
                 &format!("TARGETDIR={}", target_dir),

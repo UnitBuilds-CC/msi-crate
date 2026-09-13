@@ -42,7 +42,7 @@ fn main() {
     // Check product registration in registry
     println!("\n=== HKCU Installer Products ===");
     let output = std::process::Command::new("powershell")
-        .args(&["-Command", "Get-ChildItem 'HKCU:\\Software\\Microsoft\\Installer\\Products\\' -ErrorAction SilentlyContinue | ForEach-Object { $pn = (Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue).ProductName; Write-Host \"$($_.PSPath) => $pn\" }"])
+        .args(["-Command", "Get-ChildItem 'HKCU:\\Software\\Microsoft\\Installer\\Products\\' -ErrorAction SilentlyContinue | ForEach-Object { $pn = (Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue).ProductName; Write-Host \"$($_.PSPath) => $pn\" }"])
         .output();
     if let Ok(out) = output {
         let s = String::from_utf8_lossy(&out.stdout);

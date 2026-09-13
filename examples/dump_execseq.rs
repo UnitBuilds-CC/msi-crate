@@ -4,7 +4,7 @@ use std::io::Read;
 fn main() {
     let path = "execseq_test.msi";
     let file = std::fs::File::open(path).unwrap();
-    let mut comp = cfb::CompoundFile::open(file).unwrap();
+    let comp = cfb::CompoundFile::open(file).unwrap();
 
     let stream_entries: Vec<String> = comp.walk()
         .filter(|e| e.is_stream())
@@ -42,7 +42,7 @@ fn main() {
             }
         } else {
             // Check if it looks like _StringData (printable ASCII)
-            let is_string_data = data.iter().take(20).all(|&b| b >= 0x20 && b < 0x7f);
+            let is_string_data = data.iter().take(20).all(|&b| (0x20..0x7f).contains(&b));
             if is_string_data && data.len() > 20 {
                 println!("=== _StringData ({} bytes) ===", data.len());
                 let text: String = data.iter().map(|&b| b as char).collect();
@@ -64,7 +64,7 @@ fn main() {
                     for j in 0..16 {
                         if row + j < data.len() {
                             let b = data[row + j];
-                            if b >= 0x20 && b < 0x7f {
+                            if (0x20..0x7f).contains(&b) {
                                 print!("{}", b as char);
                             } else {
                                 print!(".");

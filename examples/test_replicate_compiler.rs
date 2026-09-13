@@ -321,7 +321,7 @@ fn main() {
     let install_dir = "C:\\temp\\vel_msi_install\\replicated";
     let log_path = "C:\\temp\\vel_msi_test\\replicated.log";
     let status = Command::new("msiexec")
-        .args(&["/i", msi_path, "/qn", "/l*v", log_path,
+        .args(["/i", msi_path, "/qn", "/l*v", log_path,
                 &format!("TARGETDIR={}", install_dir)])
         .status().unwrap();
     let code = status.code().unwrap_or(-1);
@@ -337,7 +337,7 @@ fn main() {
         }
     } else {
         println!("SUCCESS!");
-        let _ = Command::new("msiexec").args(&["/x", msi_path, "/qn"]).status();
+        let _ = Command::new("msiexec").args(["/x", msi_path, "/qn"]).status();
     }
     let _ = std::fs::remove_dir_all(install_dir);
 }

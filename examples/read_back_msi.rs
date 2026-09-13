@@ -6,7 +6,6 @@ fn val_str(v: &msi::Value) -> String {
         msi::Value::Null => "[Null]".into(),
         msi::Value::Str(s) => format!("\"{}\"", s),
         msi::Value::Int(i) => format!("{}", i),
-        _ => "?".into(),
     }
 }
 

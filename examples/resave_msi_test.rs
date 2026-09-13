@@ -1,13 +1,9 @@
-/// Test: Open our MSI with the msi crate and re-save (flush).
-/// If the re-saved MSI works → our serialization has a bug.
-/// If it still fails → our OLE structure has a bug.
-use std::io::Cursor;
 use std::process::Command;
 
 fn main() {
     println!("=== MSI CRATE RESAVE TEST ===\n");
 
-    let _ = Command::new("taskkill").args(&["/F", "/IM", "msiexec.exe"]).output();
+    let _ = Command::new("taskkill").args(["/F", "/IM", "msiexec.exe"]).output();
     std::thread::sleep(std::time::Duration::from_secs(1));
 
     // Build our MSI
@@ -79,7 +75,7 @@ fn main() {
     // Flush (re-save) the MSI
     let resave_path = "resave_msi_crate.msi";
     pkg.flush().unwrap();
-    let resave_data = {
+    let _resave_data = {
         // Get the inner file back
         let inner = pkg.into_inner().unwrap();
         drop(inner);
@@ -112,13 +108,13 @@ fn main() {
 
 fn test_msiexec(path: &str, log: &str) -> i32 {
     let output = Command::new("msiexec")
-        .args(&["/i", path, "/qn", "/norestart", "/l*v", log])
+        .args(["/i", path, "/qn", "/norestart", "/l*v", log])
         .output()
         .expect("msiexec failed");
     let code = output.status.code().unwrap_or(-1);
     if code == 0 {
         let _ = Command::new("msiexec")
-            .args(&["/x", path, "/qn", "/norestart"]).output();
+            .args(["/x", path, "/qn", "/norestart"]).output();
     }
     code
 }

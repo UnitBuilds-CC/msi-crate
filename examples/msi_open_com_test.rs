@@ -6,7 +6,7 @@ fn main() {
     println!("=== OPEN COM MSI WITH MSI CRATE ===\n");
 
     let _ = std::process::Command::new("taskkill")
-        .args(&["/F", "/IM", "msiexec.exe"]).output();
+        .args(["/F", "/IM", "msiexec.exe"]).output();
     std::thread::sleep(std::time::Duration::from_secs(1));
 
     let com_msi = "C:\\Program Files\\Microsoft Office\\root\\Integration\\C2RIntLoc.en-us.16.msi";
@@ -82,7 +82,7 @@ fn main() {
     println!("\n--- Testing with msiexec ---");
     let _ = std::fs::remove_file("C:\\temp\\msi_modified.log");
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", out_msi, "/qn", "/l*v", "C:\\temp\\msi_modified.log"])
+        .args(["/i", out_msi, "/qn", "/l*v", "C:\\temp\\msi_modified.log"])
         .output().unwrap();
     let exit_code = output.status.code().unwrap_or(-1);
     println!("Exit code: {}", exit_code);

@@ -159,12 +159,12 @@ fn main() {
     ]).unwrap();
 
     // Build MSI (WITHOUT cabinet stream)
-    let mut msi_data = builder.build().unwrap();
+    let msi_data = builder.build().unwrap();
     println!("MSI built: {} bytes (no cabinet stream yet)", msi_data.len());
 
     // Now use cfb crate to add the cabinet stream directly
     // Try multiple name variants
-    let names_to_try = vec![
+    let names_to_try = [
         "#velcab.cab",        // Raw with #
         "velcab.cab",         // Raw without #
     ];
@@ -173,12 +173,12 @@ fn main() {
         println!("\n--- Attempt {}: stream name = '{}' ---", i+1, stream_name);
         
         // Rebuild MSI from scratch each time
-        let mut msi_data = builder.build().unwrap();
+        let msi_data = builder.build().unwrap();
         
         // Open with cfb and add the stream
         let mut buf = Vec::new();
         {
-            let cursor = Cursor::new(&mut buf);
+            let _cursor = Cursor::new(&mut buf);
             // First copy the original MSI data
             buf = msi_data.clone();
             let cursor = Cursor::new(&mut buf);
@@ -199,7 +199,7 @@ fn main() {
         
         // Test with msiexec
         let output = std::process::Command::new("msiexec")
-            .args(&["/i", &path, "/qn", "/l*v", &log_path])
+            .args(["/i", &path, "/qn", "/l*v", &log_path])
             .output().unwrap();
         let ec = output.status.code().unwrap_or(-1);
         println!("Exit code: {}", ec);
@@ -218,7 +218,7 @@ fn main() {
             }
             // Uninstall
             let _ = std::process::Command::new("msiexec")
-                .args(&["/x", &product_code, "/qn"])
+                .args(["/x", &product_code, "/qn"])
                 .output();
             return;
         }

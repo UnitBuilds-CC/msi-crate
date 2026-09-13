@@ -196,7 +196,7 @@ fn main() {
     // Step 3: Test V3 with msiexec
     println!("\n--- msiexec test: V3 with ProductCode ---");
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", v3_path, "/qn", "/l*v", log_path])
+        .args(["/i", v3_path, "/qn", "/l*v", log_path])
         .output().unwrap();
     let ec = output.status.code().unwrap_or(-1);
     println!("Exit code: {}", ec);
@@ -230,7 +230,7 @@ fn main() {
     std::fs::write(v4_path, &v4_data).unwrap();
     println!("\n--- msiexec test: V4 directly ---");
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", v4_path, "/qn"])
+        .args(["/i", v4_path, "/qn"])
         .output().unwrap();
     println!("Exit code: {}", output.status.code().unwrap_or(-1));
 

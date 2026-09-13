@@ -106,13 +106,13 @@ fn main() {
 
 fn test_msiexec(path: &str) -> i32 {
     let output = Command::new("msiexec")
-        .args(&["/i", path, "/qn", "/norestart"])
+        .args(["/i", path, "/qn", "/norestart"])
         .output()
         .expect("msiexec failed");
     let code = output.status.code().unwrap_or(-1);
     if code == 0 {
         let _ = Command::new("msiexec")
-            .args(&["/x", path, "/qn", "/norestart"])
+            .args(["/x", path, "/qn", "/norestart"])
             .output();
     }
     code

@@ -113,7 +113,7 @@ fn main() {
 
     // Test with msiexec
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", "empty_cab_test.msi", "/qn", "/l*v", "empty_cab_log.txt"])
+        .args(["/i", "empty_cab_test.msi", "/qn", "/l*v", "empty_cab_log.txt"])
         .output().unwrap();
     let code = output.status.code().unwrap_or(-1);
     println!("Exit: {}", code);

@@ -41,7 +41,7 @@ fn main() {
     println!("\n=== Testing original velocity-msi ===");
     let orig_log = "C:\\temp\\repack_test\\original_install.log";
     let status = Command::new("msiexec")
-        .args(&["/i", orig_path, "/qn", "/norestart", "/l*v", orig_log])
+        .args(["/i", orig_path, "/qn", "/norestart", "/l*v", orig_log])
         .status();
     match status {
         Ok(s) => {
@@ -70,7 +70,7 @@ fn main() {
         println!("\n=== Testing repackaged velocity-msi ===");
         let repack_log = "C:\\temp\\repack_test\\repack_install.log";
         let status = Command::new("msiexec")
-            .args(&["/i", repack_path, "/qn", "/norestart", "/l*v", repack_log])
+            .args(["/i", repack_path, "/qn", "/norestart", "/l*v", repack_log])
             .status();
         match status {
             Ok(s) => {
@@ -183,8 +183,8 @@ fn read_all_streams(data: &[u8], label: &str) -> Vec<(String, Vec<u8>)> {
         let mut data = Vec::new();
         stream.read_to_end(&mut data).unwrap_or_default();
         
-        if name.starts_with('\u{0005}') {
-            streams.push((format!("\\u0005{}", &name[1..]), data));
+        if let Some(rest) = name.strip_prefix('\u{0005}') {
+            streams.push((format!("\\u0005{rest}"), data));
         } else {
             streams.push((name, data));
         }

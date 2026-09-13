@@ -187,12 +187,10 @@ fn populate_components(builder: &mut velocity_msi::MsiBuilder, files: &[(std::pa
     use velocity_msi::Value;
 
     // Generate unique GUIDs for each component
-    let component_guids = vec![
-        "{12345678-1234-1234-1234-123456789ABC}",
+    let component_guids = ["{12345678-1234-1234-1234-123456789ABC}",
         "{22345678-1234-1234-1234-123456789ABC}",
         "{32345678-1234-1234-1234-123456789ABC}",
-        "{42345678-1234-1234-1234-123456789ABC}",
-    ];
+        "{42345678-1234-1234-1234-123456789ABC}"];
 
     for (i, (file_path, file_name)) in files.iter().enumerate() {
         let component_id = format!("comp_{}", i);

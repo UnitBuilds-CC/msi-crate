@@ -1,0 +1,20 @@
+# Build artifacts
+/target/
+Cargo.lock
+
+# Generated MSI files
+*.msi
+
+# Log files
+*.log
+
+# Test artifacts
+cfb_log.txt
+msi_log.txt
+msi_log_utf8.txt
+our_log.txt
+ref_log.txt
+ref_exec_seq.log
+ref_exec_seq.log
+vel_exec_seq.log
+velocity_ole_log.txt

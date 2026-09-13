@@ -40,7 +40,7 @@ fn main() {
         for j in 0..16 {
             if i + j < cab.len() {
                 let b = cab[i+j];
-                if b >= 0x20 && b < 0x7F { print!("{}", b as char); } else { print!("."); }
+                if (0x20..0x7F).contains(&b) { print!("{}", b as char); } else { print!("."); }
             }
         }
         println!();

@@ -9,6 +9,7 @@ fn main() {
     let product_code = "A1B2C3D4-E5F6-7890-ABCD-EF1234567890";
 
     // Test: Property + various second tables
+    #[allow(clippy::type_complexity)]
     let tests: Vec<(&str, Vec<msi::Column>, Vec<Vec<msi::Value>>)> = vec![
         ("Directory", 
          vec![
@@ -98,11 +99,11 @@ fn main() {
 
         // Test
         let _ = std::process::Command::new("msiexec")
-            .args(&["/x", &format!("{{{}}}", product_code), "/qn"]).output();
+            .args(["/x", &format!("{{{}}}", product_code), "/qn"]).output();
         std::thread::sleep(std::time::Duration::from_secs(1));
 
         let output = std::process::Command::new("msiexec")
-            .args(&["/i", out_path, "/qn"]).output().expect("msiexec");
+            .args(["/i", out_path, "/qn"]).output().expect("msiexec");
         let code = output.status.code().unwrap_or(-1);
         let status = match code { 0 => "OK", 1620 => "1620", 1603 => "1603", _ => "?" };
         println!("  Property + {} -> exit {} ({})", table_name, code, status);
@@ -143,10 +144,10 @@ fn main() {
         std::fs::write(out_path, &msi_data).unwrap();
 
         let _ = std::process::Command::new("msiexec")
-            .args(&["/x", &format!("{{{}}}", product_code), "/qn"]).output();
+            .args(["/x", &format!("{{{}}}", product_code), "/qn"]).output();
         std::thread::sleep(std::time::Duration::from_secs(1));
         let output = std::process::Command::new("msiexec")
-            .args(&["/i", out_path, "/qn"]).output().expect("msiexec");
+            .args(["/i", out_path, "/qn"]).output().expect("msiexec");
         let code = output.status.code().unwrap_or(-1);
         println!("  Property only -> exit {} ({})", code, match code { 0 => "OK", _ => "?" });
     }

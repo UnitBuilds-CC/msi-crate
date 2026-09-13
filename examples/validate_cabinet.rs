@@ -109,7 +109,7 @@ fn main() {
             // Also try to verify with Windows expand
             println!("\n=== Trying expand.exe ===");
             let output = std::process::Command::new("expand")
-                .args(&["C:\\temp\\test.cab", "-F:*", "C:\\temp\\cab_extract"])
+                .args(["C:\\temp\\test.cab", "-F:*", "C:\\temp\\cab_extract"])
                 .output();
             match output {
                 Ok(o) => {

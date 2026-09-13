@@ -445,7 +445,7 @@ fn main() {
     // Test with msiexec
     println!("\n--- msiexec test ---");
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", out_path, "/qn", "/l*v", log_path])
+        .args(["/i", out_path, "/qn", "/l*v", log_path])
         .output()
         .unwrap();
     let exit_code = output.status.code().unwrap_or(-1);

@@ -53,18 +53,14 @@ impl ColumnType {
 /// Column definition
 #[derive(Debug, Clone)]
 pub struct Column {
-    /// Column name (must be unique within table)
     pub name: String,
-    /// Data type
     pub col_type: ColumnType,
-    /// Whether the column can contain NULL values
     pub nullable: bool,
-    /// Whether this column is part of the primary key
     pub primary_key: bool,
-    /// Whether this column is localizable (bit 0x200)
     pub localizable: bool,
-    /// Validation category (e.g. "Identifier", "Text", "Formatted")
     pub category: Option<String>,
+    pub key_table: Option<String>,
+    pub key_column: Option<i16>,
 }
 
 impl Column {
@@ -77,6 +73,8 @@ impl Column {
             primary_key: false,
             localizable: false,
             category: None,
+            key_table: None,
+            key_column: None,
         }
     }
 
@@ -137,6 +135,8 @@ pub struct ColumnBuilder {
     primary_key: bool,
     localizable: bool,
     category: Option<String>,
+    key_table: Option<String>,
+    key_column: Option<i16>,
 }
 
 impl ColumnBuilder {
@@ -189,6 +189,14 @@ impl ColumnBuilder {
         self
     }
 
+    /// Set the foreign key reference for _Validation (KeyTable + KeyColumn).
+    /// This tells msiexec which table/column this column references.
+    pub fn foreign_key(mut self, table: &str, column: i16) -> Self {
+        self.key_table = Some(table.to_string());
+        self.key_column = Some(column);
+        self
+    }
+
     /// Build the column
     pub fn build(self) -> Column {
         Column {
@@ -198,6 +206,8 @@ impl ColumnBuilder {
             primary_key: self.primary_key,
             localizable: self.localizable,
             category: self.category,
+            key_table: self.key_table,
+            key_column: self.key_column,
         }
     }
 }
@@ -242,10 +252,6 @@ pub struct Table {
     long_string_refs: bool,
     /// Rows (each row is a Vec of Values)
     rows: Vec<Vec<Value>>,
-    /// System tables (_Tables, _Columns, _Validation) use raw integer encoding
-    /// instead of XOR encoding. User tables use XOR encoding to distinguish
-    /// NULL (0) from valid values.
-    is_system: bool,
 }
 
 impl Table {
@@ -256,13 +262,7 @@ impl Table {
             columns,
             long_string_refs,
             rows: Vec::new(),
-            is_system: false,
         }
-    }
-
-    /// Mark this table as a system table (raw integer encoding, no XOR).
-    pub fn set_system(&mut self) {
-        self.is_system = true;
     }
 
     /// Add a row to the table

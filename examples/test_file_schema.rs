@@ -128,7 +128,7 @@ fn main() {
     println!("Testing corrected File schema...");
     let log = "C:\\temp\\file_schema_test\\correct.log";
     let status = Command::new("msiexec")
-        .args(&["/i", path, "/qn", "/norestart", "/l*v", log])
+        .args(["/i", path, "/qn", "/norestart", "/l*v", log])
         .status();
     match status {
         Ok(s) => {

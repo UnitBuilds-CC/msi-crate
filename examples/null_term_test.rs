@@ -145,7 +145,7 @@ fn main() {
         let _ = std::fs::remove_dir_all("C:\\VelTest");
         let log = fname.replace(".msi", ".log");
         let output = std::process::Command::new("msiexec")
-            .args(&["/i", fname, "/qn", "/l*v", &log])
+            .args(["/i", fname, "/qn", "/l*v", &log])
             .output().unwrap();
         let exit = output.status.code().unwrap_or(-1);
         println!("{:20} exit={}", label, exit);

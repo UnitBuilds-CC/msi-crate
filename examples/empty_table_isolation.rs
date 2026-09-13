@@ -124,7 +124,7 @@ fn main() {
     println!("=== EMPTY TABLE ISOLATION TEST ===\n");
     
     // Kill any running msiexec
-    let _ = std::process::Command::new("taskkill").args(&["/F", "/IM", "msiexec.exe"]).output();
+    let _ = std::process::Command::new("taskkill").args(["/F", "/IM", "msiexec.exe"]).output();
     std::thread::sleep(std::time::Duration::from_secs(2));
     
     // Test WITHOUT empty table
@@ -136,13 +136,13 @@ fn main() {
         println!("Without empty CA: {} bytes", data.len());
         
         let output = std::process::Command::new("msiexec")
-            .args(&["/i", path, "/qn", "/norestart"])
+            .args(["/i", path, "/qn", "/norestart"])
             .output().unwrap();
         println!("  Exit code: {}", output.status.code().unwrap_or(-1));
         
         // Uninstall
         let _ = std::process::Command::new("msiexec")
-            .args(&["/x", path, "/qn", "/norestart"]).output();
+            .args(["/x", path, "/qn", "/norestart"]).output();
         std::thread::sleep(std::time::Duration::from_secs(1));
     }
     
@@ -155,13 +155,13 @@ fn main() {
         println!("\nWith empty CA: {} bytes", data.len());
         
         let output = std::process::Command::new("msiexec")
-            .args(&["/i", path, "/qn", "/norestart"])
+            .args(["/i", path, "/qn", "/norestart"])
             .output().unwrap();
         println!("  Exit code: {}", output.status.code().unwrap_or(-1));
         
         // Uninstall
         let _ = std::process::Command::new("msiexec")
-            .args(&["/x", path, "/qn", "/norestart"]).output();
+            .args(["/x", path, "/qn", "/norestart"]).output();
     }
     
     // Binary compare

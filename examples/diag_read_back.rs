@@ -59,7 +59,7 @@ fn main() {
     println!("=== _Tables entries ===");
     let rows = package.select_rows(msi::Select::table("_Tables")).unwrap();
     for row in rows {
-        println!("  Name={:?}", &row["Name"]);
+        println!("  Name={:?}", row["Name"]);
     }
 
     println!("\n=== _Columns entries for File ===");
@@ -93,9 +93,9 @@ fn main() {
         if let msi::Value::Str(ref t) = *table_val {
             if t == "File" {
                 println!("  Col={:?} Nullable={:?} Min={:?} Max={:?} KeyTable={:?} KeyCol={:?} Category={:?} Set={:?}",
-                    &row["Column"], &row["Nullable"], &row["MinValue"],
-                    &row["MaxValue"], &row["KeyTable"], &row["KeyColumn"],
-                    &row["Category"], &row["Set"]);
+                    row["Column"], row["Nullable"], row["MinValue"],
+                    row["MaxValue"], row["KeyTable"], row["KeyColumn"],
+                    row["Category"], row["Set"]);
             }
         }
     }
@@ -104,8 +104,8 @@ fn main() {
     let rows = package.select_rows(msi::Select::table("File")).unwrap();
     for row in rows {
         println!("  File_={:?} Component_={:?} FileName={:?} FileSize={:?} Attributes={:?} Sequence={:?}",
-            &row["File_"], &row["Component_"], &row["FileName"],
-            &row["FileSize"], &row["Attributes"], &row["Sequence"]);
+            row["File_"], row["Component_"], row["FileName"],
+            row["FileSize"], row["Attributes"], row["Sequence"]);
     }
 
     println!("\n=== All streams ===");

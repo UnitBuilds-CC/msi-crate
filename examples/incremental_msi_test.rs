@@ -74,13 +74,13 @@ fn main() {
 
         // Clean previous install
         let _ = std::process::Command::new("msiexec")
-            .args(&["/x", &format!("{{{}}}", product_code), "/qn"]).output();
+            .args(["/x", &format!("{{{}}}", product_code), "/qn"]).output();
         std::thread::sleep(std::time::Duration::from_secs(1));
         let _ = std::fs::remove_dir_all("C:\\Program Files\\VelocityTest");
 
         // Test
         let output = std::process::Command::new("msiexec")
-            .args(&["/i", out_path, "/qn", "/l*v", "C:\\temp\\incr_test.log"])
+            .args(["/i", out_path, "/qn", "/l*v", "C:\\temp\\incr_test.log"])
             .output().expect("msiexec failed");
         let exit_code = output.status.code().unwrap_or(-1);
 
@@ -95,11 +95,10 @@ fn main() {
         };
         println!("[{}] -> exit {} ({})", label, exit_code, status);
 
-        if exit_code == 0 {
-            if std::path::Path::new("C:\\Program Files\\VelocityTest\\hello.txt").exists() {
+        if exit_code == 0
+            && std::path::Path::new("C:\\Program Files\\VelocityTest\\hello.txt").exists() {
                 println!("  FILE INSTALLED!");
             }
-        }
 
         if exit_code != 0 && exit_code != 1603 && exit_code != 1605 {
             // Read log
@@ -285,7 +284,7 @@ fn create_cabinet_data(source_dir: &str, files: &[&str]) -> Vec<u8> {
     }
     std::fs::write(ddf_path, &ddf).unwrap();
     let output = std::process::Command::new("makecab")
-        .args(&["/f", ddf_path]).output().expect("makecab failed");
+        .args(["/f", ddf_path]).output().expect("makecab failed");
     if !output.status.success() { panic!("makecab failed"); }
     let _ = std::fs::remove_file(ddf_path);
     let _ = std::fs::remove_file("C:\\temp\\setup.inf");

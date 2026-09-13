@@ -1,14 +1,9 @@
 //! String pool management for MSI databases
 //!
-//! The string pool assigns sequential IDs to strings and handles UTF-8 encoding.
+//! The string pool assigns sequential IDs to strings and handles Windows-1252 encoding.
 //! MSI requires strings to be sorted by their pool ID, not alphabetically.
 
-use crate::error::Result;
 use std::collections::BTreeMap;
-
-/// Maximum length for short strings (stored inline in table rows)
-#[allow(dead_code)]
-pub const MAX_SHORT_STRING: usize = 255;
 
 /// String pool that assigns IDs to strings
 #[derive(Debug)]
@@ -59,11 +54,6 @@ impl StringPool {
         } else {
             self.strings.get(text).map(|&(id, _)| id)
         }
-    }
-
-    /// Encode a string to UTF-8 bytes
-    pub fn encode(text: &str) -> Result<Vec<u8>> {
-        Ok(text.as_bytes().to_vec())
     }
 
     /// Encode a string to Windows-1252 bytes.
@@ -179,11 +169,5 @@ mod tests {
         assert_eq!(id1, 1);
         assert_eq!(id2, 2);
         assert_eq!(id3, 1); // Same as first "Hello"
-    }
-
-    #[test]
-    fn test_encode_utf8() {
-        let bytes = StringPool::encode("Hello").unwrap();
-        assert_eq!(bytes, vec![72, 101, 108, 108, 111]);
     }
 }

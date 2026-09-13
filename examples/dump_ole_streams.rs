@@ -12,7 +12,7 @@ fn main() {
     }
     
     let sector_size = 512u32; // V3
-    let mini_sector_size = 64u32;
+    let _mini_sector_size = 64u32;
     
     // Read header fields
     let num_fat_sectors = u32::from_le_bytes([data[44], data[45], data[46], data[47]]);

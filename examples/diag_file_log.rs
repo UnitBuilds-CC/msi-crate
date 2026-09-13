@@ -145,7 +145,7 @@ fn main() {
 
     println!("Testing File table MSI...");
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", path, "/qn", "/l*v", log_path])
+        .args(["/i", path, "/qn", "/l*v", log_path])
         .output().unwrap();
     let ec = output.status.code().unwrap_or(-1);
     println!("Exit code: {}", ec);

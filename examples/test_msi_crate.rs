@@ -20,14 +20,11 @@ fn main() {
     // Set required SummaryInfo properties
     {
         let summary = package.summary_info_mut();
-        summary.set_title("Installation Database".to_string());
-        summary.set_subject("TestProduct".to_string());
-        summary.set_author("TestCo".to_string());
-        // PID 7 - Subject/Template
-        // PID 9 - Revision Number (REQUIRED by msiexec)
-        summary.set_revision_number("{12345678-1234-1234-1234-123456789012}".to_string());
-        // PID 14 - Security (required)
-        summary.set_security(405);
+        summary.set_title("Installation Database");
+        summary.set_subject("TestProduct");
+        summary.set_author("TestCo");
+        // PID 9 - UUID (REQUIRED by msiexec)
+        summary.set_uuid(uuid::Uuid::parse_str("12345678-1234-1234-1234-123456789012").unwrap());
         // PID 15 - WordCount
         summary.set_word_count(2);
     }
@@ -61,7 +58,7 @@ fn main() {
     println!("\n=== Testing V4 MSI ===");
     let v4_log = "C:\\temp\\msi_crate_test\\v4_install.log";
     let status = Command::new("msiexec")
-        .args(&["/i", v4_path, "/qn", "/norestart", "/l*v", v4_log])
+        .args(["/i", v4_path, "/qn", "/norestart", "/l*v", v4_log])
         .status();
     match status {
         Ok(s) => {
@@ -90,7 +87,7 @@ fn main() {
         println!("\n=== Testing V3 MSI ===");
         let v3_log = "C:\\temp\\msi_crate_test\\v3_install.log";
         let status = Command::new("msiexec")
-            .args(&["/i", v3_path, "/qn", "/norestart", "/l*v", v3_log])
+            .args(["/i", v3_path, "/qn", "/norestart", "/l*v", v3_log])
             .status();
         match status {
             Ok(s) => {
@@ -129,7 +126,7 @@ fn repackage_v4_to_v3(v4_data: &[u8]) -> Option<Vec<u8>> {
         .map(|e| (e.path().to_owned(), e.name().to_owned()))
         .collect();
     
-    for (path, name) in entries {
+    for (path, _name) in entries {
         let mut stream = v4_cf.open_stream(&path).ok()?;
         let mut data = Vec::new();
         stream.read_to_end(&mut data).ok()?;
@@ -204,8 +201,8 @@ fn read_all_streams(data: &[u8], label: &str) -> Vec<(String, Vec<u8>)> {
         let mut data = Vec::new();
         stream.read_to_end(&mut data).unwrap_or_default();
         
-        if name.starts_with('\u{0005}') {
-            streams.push((format!("\\u0005{}", &name[1..]), data));
+        if let Some(rest) = name.strip_prefix('\u{0005}') {
+            streams.push((format!("\\u0005{rest}"), data));
         } else {
             streams.push((name, data));
         }

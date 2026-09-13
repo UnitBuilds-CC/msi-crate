@@ -78,7 +78,7 @@ fn test_msi(path: &str, label: &str) -> i32 {
     let _ = fs::remove_dir_all("C:\\VelTest");
     let log = format!("{}.log", label);
     let output = Command::new("msiexec")
-        .args(&["/i", path, "/qn", "/l*v", &log])
+        .args(["/i", path, "/qn", "/l*v", &log])
         .output()
         .unwrap();
     let exit = output.status.code().unwrap_or(-1);

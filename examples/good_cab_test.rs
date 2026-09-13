@@ -184,7 +184,7 @@ fn main() {
     // Test with msiexec
     println!("\n--- msiexec install test ---");
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", path, "/qn", "/l*v", log_path])
+        .args(["/i", path, "/qn", "/l*v", log_path])
         .output().unwrap();
     let ec = output.status.code().unwrap_or(-1);
     println!("Exit code: {}", ec);
@@ -232,7 +232,7 @@ fn main() {
     if ec == 0 {
         println!("\n--- msiexec uninstall test ---");
         let output = std::process::Command::new("msiexec")
-            .args(&["/x", &product_code, "/qn"])
+            .args(["/x", &product_code, "/qn"])
             .output().unwrap();
         let ec2 = output.status.code().unwrap_or(-1);
         println!("Uninstall exit code: {}", ec2);

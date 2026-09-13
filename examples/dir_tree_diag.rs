@@ -43,7 +43,7 @@ fn build_msi(label: &str, dir_rows: Vec<Vec<Value>>, seq_rows: Vec<Vec<Value>>) 
 
     let _ = std::fs::remove_dir_all("C:\\VelTest");
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", &fname, "/qn", "/l*v", &format!("dir_{}.log", label.to_lowercase())])
+        .args(["/i", &fname, "/qn", "/l*v", &format!("dir_{}.log", label.to_lowercase())])
         .output().unwrap();
     let exit = output.status.code().unwrap_or(-1);
     println!("{:40} exit={}", label, exit);

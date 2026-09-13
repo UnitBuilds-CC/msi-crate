@@ -31,14 +31,14 @@ fn main() {
 
     // Test with msiexec
     let status = std::process::Command::new("msiexec")
-        .args(&["/i", out_path, "/qn", "/norestart"])
+        .args(["/i", out_path, "/qn", "/norestart"])
         .status()
         .expect("Failed to run msiexec");
     println!("msiexec exit code: {}", status.code().unwrap_or(-1));
 
     // Uninstall
     let status2 = std::process::Command::new("msiexec")
-        .args(&["/x", "{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}", "/qn", "/norestart"])
+        .args(["/x", "{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}", "/qn", "/norestart"])
         .status();
     if let Ok(s) = status2 {
         println!("uninstall exit code: {}", s.code().unwrap_or(-1));
@@ -83,7 +83,7 @@ fn main() {
     // Expected MSI CLSID: {000C1084-0000-0000-C000-000000000046}
     let expected = [0x84, 0x10, 0x0C, 0x00, 0x00, 0x00, 0x00, 0x00,
                     0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46];
-    if clsid == &expected {
+    if clsid == expected {
         println!("  ✓ Root CLSID matches MSI CLSID");
     } else {
         println!("  ✗ Root CLSID does NOT match MSI CLSID");

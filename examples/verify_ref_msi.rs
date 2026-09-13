@@ -29,7 +29,7 @@ fn main() {
     match pkg.select_rows(Select::table("Property")) {
         Ok(rows) => {
             for row in rows {
-                eprintln!("  {:?} = {:?}", &row[0], &row[1]);
+                eprintln!("  {:?} = {:?}", row[0], row[1]);
             }
         }
         Err(e) => eprintln!("  ERROR: {}", e),

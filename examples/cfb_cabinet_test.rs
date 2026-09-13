@@ -1,6 +1,6 @@
 /// Use cfb to repackage: take our nofile MSI (which works) and add cabinet + Media table
 /// This isolates whether the issue is OLE structure or MSI data.
-use std::io::{Read, Write, Cursor, Seek, SeekFrom};
+use std::io::{Write, Cursor};
 use velocity_msi::{MsiBuilder, Column, Value, CabinetFile, build_cabinet};
 
 fn main() {
@@ -125,7 +125,7 @@ fn main() {
 
     // List streams
     println!("\n=== Streams ===");
-    let mut comp2 = cfb::CompoundFile::open(Cursor::new(&result)).unwrap();
+    let comp2 = cfb::CompoundFile::open(Cursor::new(&result)).unwrap();
     let paths: Vec<_> = comp2.walk()
         .map(|e| (e.path().to_string_lossy().to_string(), e.is_stream()))
         .collect();
@@ -136,7 +136,7 @@ fn main() {
     // Test with msiexec
     println!("\n=== msiexec test ===");
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", "cfb_test.msi", "/qn", "/l*v", "cfb_test_log.txt"])
+        .args(["/i", "cfb_test.msi", "/qn", "/l*v", "cfb_test_log.txt"])
         .output().unwrap();
     println!("Exit: {}", output.status.code().unwrap_or(-1));
 

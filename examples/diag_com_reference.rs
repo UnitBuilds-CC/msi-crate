@@ -5,7 +5,7 @@
 //! 2. Reads it back with msi crate
 //! 3. Compares _Columns, _Validation, string pool with velocity-msi output
 
-use std::io::{Cursor, Write};
+use std::io::Cursor;
 use std::process::Command;
 use velocity_msi::{MsiBuilder, Column, Value};
 
@@ -101,7 +101,7 @@ Write-Host "Reference MSI created at C:\temp\ref_msi_test\reference.msi"
     
     // Run PowerShell
     let output = Command::new("powershell")
-        .args(&["-ExecutionPolicy", "Bypass", "-File", script_path])
+        .args(["-ExecutionPolicy", "Bypass", "-File", script_path])
         .output();
     
     match output {
@@ -321,7 +321,7 @@ Write-Host "Reference MSI created at C:\temp\ref_msi_test\reference.msi"
     println!("\n=== Testing reference MSI ===");
     let ref_log = "C:\\temp\\ref_msi_test\\ref_install.log";
     let status = Command::new("msiexec")
-        .args(&["/i", ref_path, "/qn", "/norestart", "/l*v", ref_log])
+        .args(["/i", ref_path, "/qn", "/norestart", "/l*v", ref_log])
         .status();
     match status {
         Ok(s) => println!("Reference MSI msiexec exit code: {}", s.code().unwrap_or(-1)),
@@ -331,7 +331,7 @@ Write-Host "Reference MSI created at C:\temp\ref_msi_test\reference.msi"
     println!("\n=== Testing velocity MSI ===");
     let our_log = "C:\\temp\\ref_msi_test\\velocity_install.log";
     let status = Command::new("msiexec")
-        .args(&["/i", our_path, "/qn", "/norestart", "/l*v", our_log])
+        .args(["/i", our_path, "/qn", "/norestart", "/l*v", our_log])
         .status();
     match status {
         Ok(s) => println!("Velocity MSI msiexec exit code: {}", s.code().unwrap_or(-1)),
@@ -340,7 +340,7 @@ Write-Host "Reference MSI created at C:\temp\ref_msi_test\reference.msi"
     
     // Uninstall reference
     let _ = Command::new("msiexec")
-        .args(&["/x", ref_path, "/qn", "/norestart"])
+        .args(["/x", ref_path, "/qn", "/norestart"])
         .status();
 }
 
@@ -416,8 +416,8 @@ fn read_all_streams(data: &[u8], label: &str) -> Vec<(String, Vec<u8>)> {
         use std::io::Read;
         stream.read_to_end(&mut data).unwrap_or_default();
         
-        if name.starts_with('\u{0005}') {
-            streams.push((format!("\\u0005{}", &name[1..]), data));
+        if let Some(rest) = name.strip_prefix('\u{0005}') {
+            streams.push((format!("\\u0005{rest}"), data));
         } else {
             streams.push((name, data));
         }

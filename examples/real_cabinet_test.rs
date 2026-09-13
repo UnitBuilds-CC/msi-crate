@@ -231,7 +231,7 @@ fn main() {
     // Test with msiexec
     println!("\n--- msiexec install ---");
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", out_path, "/qn", "/l*v", log_path, "/norestart"])
+        .args(["/i", out_path, "/qn", "/l*v", log_path, "/norestart"])
         .output()
         .unwrap();
     let code = output.status.code().unwrap_or(-1);
@@ -268,7 +268,7 @@ fn main() {
         // Uninstall using MSI path
         println!("\n--- msiexec uninstall ---");
         let output = std::process::Command::new("msiexec")
-            .args(&["/x", out_path, "/qn", "/norestart"])
+            .args(["/x", out_path, "/qn", "/norestart"])
             .output()
             .unwrap();
         let code = output.status.code().unwrap_or(-1);
@@ -277,7 +277,7 @@ fn main() {
             // Try via product code
             println!("Trying uninstall via product code...");
             let output2 = std::process::Command::new("msiexec")
-                .args(&["/x", &pc, "/qn", "/norestart"])
+                .args(["/x", &pc, "/qn", "/norestart"])
                 .output()
                 .unwrap();
             let code2 = output2.status.code().unwrap_or(-1);

@@ -129,8 +129,8 @@ fn build_base_msi(product_code: &str, upgrade_code: &str, file_size: i32) -> Msi
 fn main() {
     println!("=== ENCODED CABINET STREAM NAME TEST ===\n");
 
-    let product_code = make_uuid();
-    let upgrade_code = make_uuid();
+    let _product_code = make_uuid();
+    let _upgrade_code = make_uuid();
     let cab_data = std::fs::read("C:\\temp\\good.cab").unwrap();
     let file_content = std::fs::read("C:\\temp\\testfile.txt").unwrap();
     
@@ -186,7 +186,7 @@ fn main() {
         std::fs::write(&path, &buf).unwrap();
         
         let output = std::process::Command::new("msiexec")
-            .args(&["/i", &path, "/qn", "/l*v", &log_path])
+            .args(["/i", &path, "/qn", "/l*v", &log_path])
             .output().unwrap();
         let ec = output.status.code().unwrap_or(-1);
         println!("  Exit code: {}", ec);
@@ -203,7 +203,7 @@ fn main() {
             }
             // Uninstall
             let _ = std::process::Command::new("msiexec")
-                .args(&["/x", &pc, "/qn"]).output();
+                .args(["/x", &pc, "/qn"]).output();
             return;
         }
         

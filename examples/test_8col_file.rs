@@ -211,7 +211,7 @@ fn main() {
     let log_path = format!("{}\\install.log", install_dir);
     println!("\n--- Installing ---");
     let status = Command::new("msiexec")
-        .args(&[
+        .args([
             "/i", &msi_path,
             "/qn", "/norestart",
             "/l*v", &log_path,
@@ -248,7 +248,7 @@ fn main() {
         // Try to uninstall
         println!("\n--- Uninstalling ---");
         let status = Command::new("msiexec")
-            .args(&["/x", &msi_path, "/qn", "/norestart"])
+            .args(["/x", &msi_path, "/qn", "/norestart"])
             .status();
         let uninst_code = match status {
             Ok(s) => s.code().unwrap_or(-1),

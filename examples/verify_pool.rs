@@ -80,7 +80,7 @@ fn main() {
              installdir, targetdir, veltest);
     println!("  Row 1 (TARGETDIR):  col0={:04x} col1={:04x} col2={:04x}",
              targetdir, 0u16, sourcedir);
-    println!("  Binary: {:02x?}", &[
+    println!("  Binary: {:02x?}", [
         (installdir & 0xff) as u8, (installdir >> 8) as u8,
         (targetdir & 0xff) as u8, (targetdir >> 8) as u8,
         (targetdir & 0xff) as u8, (targetdir >> 8) as u8,

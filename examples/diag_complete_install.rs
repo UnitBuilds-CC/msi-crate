@@ -179,7 +179,7 @@ fn main() {
         std::fs::write(path, &msi_data).unwrap();
 
         let output = std::process::Command::new("msiexec")
-            .args(&["/i", path, "/qn", "/l*v", log_path])
+            .args(["/i", path, "/qn", "/l*v", log_path])
             .output().unwrap();
         let ec = output.status.code().unwrap_or(-1);
         println!("Exit code: {}", ec);
@@ -206,10 +206,8 @@ fn main() {
                 println!("WARNING: File not found at expected path: {}", install_path);
                 // Check what's in the install dir
                 if let Ok(entries) = std::fs::read_dir("C:\\Program Files\\VelocityTest") {
-                    for entry in entries {
-                        if let Ok(entry) = entry {
-                            println!("  Found: {:?}", entry.path());
-                        }
+                    for entry in entries.flatten() {
+                        println!("  Found: {:?}", entry.path());
                     }
                 }
             }
@@ -306,7 +304,7 @@ fn main() {
         std::fs::write(path, &msi_data).unwrap();
 
         let output = std::process::Command::new("msiexec")
-            .args(&["/i", path, "/qn", "/l*v", log_path])
+            .args(["/i", path, "/qn", "/l*v", log_path])
             .output().unwrap();
         let ec = output.status.code().unwrap_or(-1);
         println!("Exit code: {}", ec);

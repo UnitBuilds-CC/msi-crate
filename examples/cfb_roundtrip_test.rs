@@ -9,7 +9,7 @@ fn main() {
     println!("=== CFB ROUNDTRIP TEST ===\n");
 
     let _ = std::process::Command::new("taskkill")
-        .args(&["/F", "/IM", "msiexec.exe"]).output();
+        .args(["/F", "/IM", "msiexec.exe"]).output();
     std::thread::sleep(std::time::Duration::from_secs(2));
 
     let template_path = "C:\\Program Files\\Microsoft Office\\root\\Integration\\C2RIntLoc.en-us.16.msi";
@@ -64,7 +64,7 @@ fn main() {
     // Test with msiexec
     println!("\n--- Testing roundtrip MSI with msiexec ---");
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", out_path, "/qn", "/l*v", "C:\\temp\\cfb_roundtrip.log"])
+        .args(["/i", out_path, "/qn", "/l*v", "C:\\temp\\cfb_roundtrip.log"])
         .output().unwrap();
     let exit_code = output.status.code().unwrap_or(-1);
     println!("Exit code: {}", exit_code);
@@ -92,7 +92,7 @@ fn main() {
     // Also test the original template
     println!("\n--- Testing original template with msiexec ---");
     let output2 = std::process::Command::new("msiexec")
-        .args(&["/i", template_path, "/qn", "/l*v", "C:\\temp\\cfb_template.log"])
+        .args(["/i", template_path, "/qn", "/l*v", "C:\\temp\\cfb_template.log"])
         .output().unwrap();
     let exit2 = output2.status.code().unwrap_or(-1);
     println!("Original template exit code: {}", exit2);

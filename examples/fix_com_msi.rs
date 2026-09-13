@@ -73,7 +73,7 @@ fn main() {
     println!("\n--- msiexec test ---");
     let _ = std::fs::remove_file("C:\\temp\\fixed_com.log");
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", out_path, "/qn", "/l*v", "C:\\temp\\fixed_com.log"])
+        .args(["/i", out_path, "/qn", "/l*v", "C:\\temp\\fixed_com.log"])
         .output().unwrap();
     let exit_code = output.status.code().unwrap_or(-1);
     println!("Exit code: {}", exit_code);

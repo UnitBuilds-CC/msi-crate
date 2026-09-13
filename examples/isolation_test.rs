@@ -45,7 +45,7 @@ fn build_msi(include_validation: bool, include_exec_seq: bool) -> Vec<u8> {
         ]).unwrap();
     }
 
-    let mut msi_data = b.build().unwrap();
+    let msi_data = b.build().unwrap();
 
     // If we don't want _Validation, we need to rebuild without it.
     // Since we can't easily remove it from the builder, let's just note the intent.
@@ -65,14 +65,14 @@ fn test_msiexec(data: &[u8], name: &str) -> i32 {
     std::fs::write(&path, data).unwrap();
 
     let output = Command::new("msiexec")
-        .args(&["/i", &path, "/qn", "/norestart", "/l*v", &log])
+        .args(["/i", &path, "/qn", "/norestart", "/l*v", &log])
         .output()
         .expect("msiexec failed");
     let code = output.status.code().unwrap_or(-1);
 
     if code == 0 {
         let _ = Command::new("msiexec")
-            .args(&["/x", &path, "/qn", "/norestart"]).output();
+            .args(["/x", &path, "/qn", "/norestart"]).output();
     }
     code
 }
@@ -80,7 +80,7 @@ fn test_msiexec(data: &[u8], name: &str) -> i32 {
 fn main() {
     println!("=== ISOLATION TEST ===\n");
 
-    let _ = Command::new("taskkill").args(&["/F", "/IM", "msiexec.exe"]).output();
+    let _ = Command::new("taskkill").args(["/F", "/IM", "msiexec.exe"]).output();
     std::thread::sleep(std::time::Duration::from_secs(1));
 
     // Test 1: Property + Directory only (no ExecSeq, with _Validation)
@@ -204,7 +204,7 @@ fn main() {
 
         let log4 = "test_no_validation.log";
         let output4 = Command::new("msiexec")
-            .args(&["/i", path4, "/qn", "/norestart", "/l*v", log4])
+            .args(["/i", path4, "/qn", "/norestart", "/l*v", log4])
             .output()
             .expect("msiexec failed");
         let code4 = output4.status.code().unwrap_or(-1);
@@ -212,7 +212,7 @@ fn main() {
 
         if code4 == 0 {
             let _ = Command::new("msiexec")
-                .args(&["/x", path4, "/qn", "/norestart"]).output();
+                .args(["/x", path4, "/qn", "/norestart"]).output();
         }
     }
 

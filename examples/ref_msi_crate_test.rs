@@ -202,11 +202,11 @@ fn build_cabinet(file1: &[u8], file2: &[u8]) -> Vec<u8> {
         let mut builder = cab::CabinetBuilder::new();
         let folder = builder.add_folder(cab::CompressionType::None);
         {
-            let mut f = folder.add_file("readme.txt");
+            let _f = folder.add_file("readme.txt");
             // FileBuilder doesn't have set_data - we write via FileWriter after build
         }
         {
-            let mut f = folder.add_file("data.txt");
+            let _f = folder.add_file("data.txt");
         }
         
         let mut cabinet = builder.build(&mut cab_cursor).expect("build cab");

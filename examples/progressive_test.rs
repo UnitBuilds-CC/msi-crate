@@ -38,7 +38,7 @@ fn build_and_test(label: &str, build_fn: impl FnOnce(&mut MsiBuilder)) {
 
     let _ = std::fs::remove_dir_all("C:\\VelTest");
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", &fname, "/qn", "/l*v", &format!("prog_{}.log", label.to_lowercase().replace(' ', "_"))])
+        .args(["/i", &fname, "/qn", "/l*v", &format!("prog_{}.log", label.to_lowercase().replace(' ', "_"))])
         .output().unwrap();
     let exit = output.status.code().unwrap_or(-1);
     let installed = std::path::Path::new("C:\\VelTest").exists();

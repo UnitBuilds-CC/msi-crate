@@ -12,7 +12,7 @@ fn main() {
     let cursor = Cursor::new(data.clone());
     
     // Open with msi crate (read-write mode)
-    let mut pkg = msi::Package::open(cursor).unwrap();
+    let pkg = msi::Package::open(cursor).unwrap();
     eprintln!("Opened MSI successfully");
     
     // Verify we can read tables

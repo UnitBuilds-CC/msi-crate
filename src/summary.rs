@@ -34,7 +34,6 @@ const PID_CREATE_TIME: u32 = 12;
 const PID_LAST_SAVE_TIME: u32 = 13;
 const PID_WORD_COUNT: u32 = 15;
 const PID_CREATING_APP: u32 = 18;
-const PID_LAST_AUTHOR: u32 = 8;
 const PID_SECURITY: u32 = 14;
 const PID_CATEGORY: u32 = 19;
 
@@ -73,17 +72,9 @@ pub struct SummaryInfo {
 /// A property to be serialized into the OLE Property Set
 struct Prop {
     id: u32,
-    #[allow(dead_code)]
     vtype: u32,
     /// Value data (type code + value, padded to 4 bytes)
     data: Vec<u8>,
-}
-
-impl Prop {
-    /// Total size including padding (always multiple of 4)
-    fn padded_size(&self) -> u32 {
-        self.data.len() as u32
-    }
 }
 
 /// Calculate the msi crate's size_including_padding for a property.

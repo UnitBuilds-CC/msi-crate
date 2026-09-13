@@ -123,7 +123,7 @@ fn main() {
     println!("\n=== msiexec ===");
     let _ = std::fs::remove_dir_all("C:\\VelTest");
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", "dump_test.msi", "/qn", "/l*v", "dump_log.txt"])
+        .args(["/i", "dump_test.msi", "/qn", "/l*v", "dump_log.txt"])
         .output().unwrap();
     println!("exit: {}", output.status.code().unwrap_or(-1));
     if let Ok(log) = std::fs::read_to_string("dump_log.txt") {

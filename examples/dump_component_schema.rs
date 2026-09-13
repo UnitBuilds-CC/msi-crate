@@ -44,7 +44,7 @@ fn main() {
     println!("\n=== ALL _Columns entries ===");
     for row in pkg.select_rows(msi::Select::table("_Columns")).expect("read _Columns") {
         let table = row[0].as_str().unwrap_or("?");
-        let number = row[1].as_int().unwrap_or(-1);
+        let _number = row[1].as_int().unwrap_or(-1);
         let name = row[2].as_str().unwrap_or("?");
         let type_val = row[3].as_int().unwrap_or(-1);
         println!("  {}.{}: Type=0x{:04X}", table, name, type_val);

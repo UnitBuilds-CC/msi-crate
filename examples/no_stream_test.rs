@@ -113,7 +113,7 @@ fn main() {
     }
 
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", "no_stream.msi", "/qn", "/l*v", "no_stream_log.txt"])
+        .args(["/i", "no_stream.msi", "/qn", "/l*v", "no_stream_log.txt"])
         .output().unwrap();
     println!("Exit: {}", output.status.code().unwrap_or(-1));
     // Keep files for inspection

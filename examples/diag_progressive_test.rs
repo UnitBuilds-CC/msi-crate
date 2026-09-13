@@ -131,7 +131,7 @@ fn test_msi(name: &str, msi_data: &[u8]) -> i32 {
     std::fs::write(&path, msi_data).unwrap();
 
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", &path, "/qn", "/l*v", &log_path])
+        .args(["/i", &path, "/qn", "/l*v", &log_path])
         .output().unwrap();
     let ec = output.status.code().unwrap_or(-1);
 
@@ -159,7 +159,7 @@ fn test_msi(name: &str, msi_data: &[u8]) -> i32 {
     ec
 }
 
-fn list_streams(name: &str, msi_data: &[u8]) {
+fn list_streams(_name: &str, msi_data: &[u8]) {
     let cursor = Cursor::new(msi_data);
     let comp = cfb::CompoundFile::open(cursor).unwrap();
     let streams: Vec<(String, u64)> = comp.walk()
@@ -368,7 +368,7 @@ fn main() {
             ".Option Explicit\n.Set CabinetNameTemplate=makecab.cab\n.Set DiskDirectoryTemplate=C:\\temp\n.Set MaxDiskSize=0\n.Set Cabinet=on\n.Set Compress=on\n\"C:\\temp\\testfile.txt\"\n").unwrap();
         
         let makecab_result = std::process::Command::new("makecab")
-            .args(&["/f", "C:\\temp\\makecab.ddf"])
+            .args(["/f", "C:\\temp\\makecab.ddf"])
             .output();
         
         let cab_data = match makecab_result {

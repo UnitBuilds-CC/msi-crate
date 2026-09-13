@@ -3,7 +3,6 @@
 //! Previous tests showed that velocity-msi V4 format works with msiexec (exit 0).
 //! Now test if a complete MSI with File table + cabinet also works.
 
-use std::io::Cursor;
 use std::process::Command;
 use velocity_msi::{MsiBuilder, Column, Value, CabinetFile, build_cabinet};
 
@@ -149,7 +148,7 @@ fn main() {
     println!("\n=== Testing complete MSI with msiexec ===");
     let log_path = "C:\\temp\\complete_test\\install.log";
     let status = Command::new("msiexec")
-        .args(&["/i", msi_path, "/qn", "/norestart", "/l*v", log_path])
+        .args(["/i", msi_path, "/qn", "/norestart", "/l*v", log_path])
         .status();
     match status {
         Ok(s) => {
@@ -193,7 +192,7 @@ fn main() {
     // If install succeeded, try uninstall
     println!("\n=== Testing uninstall ===");
     let status = Command::new("msiexec")
-        .args(&["/x", msi_path, "/qn", "/norestart"])
+        .args(["/x", msi_path, "/qn", "/norestart"])
         .status();
     match status {
         Ok(s) => {

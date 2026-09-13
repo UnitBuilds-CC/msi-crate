@@ -58,7 +58,7 @@ fn main() {
     // Test both with msiexec
     for code in &["{EEEEEEEE-EEEE-EEEE-EEEE-EEEEEEEEEEEE}", "{FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF}"] {
         let _ = std::process::Command::new("msiexec")
-            .args(&["/x", code, "/qn", "/norestart"]).output();
+            .args(["/x", code, "/qn", "/norestart"]).output();
     }
     std::thread::sleep(std::time::Duration::from_secs(1));
 
@@ -72,7 +72,7 @@ fn main() {
 
         println!("\n=== Testing {} MSI ===", name.to_uppercase());
         let output = std::process::Command::new("msiexec")
-            .args(&["/i", &msi_file, "/qn", "/l*v", &logfile]).output().unwrap();
+            .args(["/i", &msi_file, "/qn", "/l*v", &logfile]).output().unwrap();
         println!("{} exit: {}", name.to_uppercase(), output.status.code().unwrap_or(-1));
 
         if let Ok(log) = std::fs::read_to_string(&logfile) {

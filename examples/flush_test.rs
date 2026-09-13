@@ -20,7 +20,7 @@ fn main() {
     std::fs::copy(template_path, copy_path).unwrap();
     println!("Testing original template...");
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", copy_path, "/qn", "/l*v", "C:\\temp\\flush_test_orig.log"])
+        .args(["/i", copy_path, "/qn", "/l*v", "C:\\temp\\flush_test_orig.log"])
         .output().unwrap();
     println!("  Original exit code: {}", output.status.code().unwrap_or(-1));
 
@@ -45,7 +45,7 @@ fn main() {
     println!("\nTesting flushed output...");
     let _ = std::fs::remove_file("C:\\temp\\flush_test_output.log");
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", out_path, "/qn", "/l*v", "C:\\temp\\flush_test_output.log"])
+        .args(["/i", out_path, "/qn", "/l*v", "C:\\temp\\flush_test_output.log"])
         .output().unwrap();
     let exit_code = output.status.code().unwrap_or(-1);
     println!("  Flushed exit code: {}", exit_code);
@@ -101,7 +101,7 @@ fn main() {
     println!("\nTesting after table deletion...");
     let _ = std::fs::remove_file("C:\\temp\\flush_test_del.log");
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", out_path2, "/qn", "/l*v", "C:\\temp\\flush_test_del.log"])
+        .args(["/i", out_path2, "/qn", "/l*v", "C:\\temp\\flush_test_del.log"])
         .output().unwrap();
     let exit_code = output.status.code().unwrap_or(-1);
     println!("  Delete exit code: {}", exit_code);

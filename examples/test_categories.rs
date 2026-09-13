@@ -120,7 +120,7 @@ fn main() {
     println!("Testing with categories...");
     let log = "C:\\temp\\category_test\\with_cat.log";
     let status = Command::new("msiexec")
-        .args(&["/i", path, "/qn", "/norestart", "/l*v", log])
+        .args(["/i", path, "/qn", "/norestart", "/l*v", log])
         .status();
     match status {
         Ok(s) => {

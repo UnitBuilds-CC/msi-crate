@@ -11,7 +11,7 @@ fn test_msi(label: &str, builder: &mut MsiBuilder) -> i32 {
     
     let log = format!("C:\\temp\\name_test\\{}.log", label);
     let status = Command::new("msiexec")
-        .args(&["/i", &path, "/qn", "/norestart", "/l*v", &log])
+        .args(["/i", &path, "/qn", "/norestart", "/l*v", &log])
         .status();
     
     let code = match status {
@@ -19,7 +19,7 @@ fn test_msi(label: &str, builder: &mut MsiBuilder) -> i32 {
         Err(_) => -1,
     };
     if code == 0 {
-        let _ = Command::new("msiexec").args(&["/x", &path, "/qn", "/norestart"]).status();
+        let _ = Command::new("msiexec").args(["/x", &path, "/qn", "/norestart"]).status();
     }
     code
 }

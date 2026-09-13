@@ -10,7 +10,7 @@ fn main() {
     match std::fs::read(path) {
         Ok(data) => {
             println!("--- {} ({} bytes) ---", path, data.len());
-            let mut comp = cfb::CompoundFile::open(Cursor::new(&data)).unwrap();
+            let comp = cfb::CompoundFile::open(Cursor::new(&data)).unwrap();
             let root = comp.root_entry();
             println!("Root CLSID: {}", root.clsid());
             println!("Root name: {:?}", root.name());
@@ -50,7 +50,7 @@ fn main() {
     match std::fs::read(path2) {
         Ok(data) => {
             println!("--- {} ({} bytes) ---", path2, data.len());
-            let mut comp = cfb::CompoundFile::open(Cursor::new(&data)).unwrap();
+            let comp = cfb::CompoundFile::open(Cursor::new(&data)).unwrap();
             let root = comp.root_entry();
             println!("Root CLSID: {}", root.clsid());
             let expected_clsid = uuid::Uuid::from_bytes([

@@ -39,9 +39,9 @@ fn main() {
     let pkg = msi::Package::open(cursor).expect("Failed to open custom MSI");
     
     // Collect all stream names and data
-    let mut streams: Vec<(String, Vec<u8>)> = Vec::new();
+    let _streams: Vec<(String, Vec<u8>)> = Vec::new();
     for table in pkg.tables() {
-        let name = table.name().to_string();
+        let _name = table.name().to_string();
         // We can't easily extract the raw stream data from msi crate
         // Let me try a different approach
     }
@@ -125,7 +125,7 @@ fn main() {
     // Test with msiexec
     println!("\n=== msiexec test ===");
     let status = std::process::Command::new("msiexec")
-        .args(&["/i", "C:\\temp\\custom_ole.msi", "/qn", "/norestart", "/l*v", "C:\\temp\\custom_ole.log"])
+        .args(["/i", "C:\\temp\\custom_ole.msi", "/qn", "/norestart", "/l*v", "C:\\temp\\custom_ole.log"])
         .status();
     let code = status.map(|s| s.code().unwrap_or(-1)).unwrap_or(-1);
     println!("msiexec exit code: {}", code);

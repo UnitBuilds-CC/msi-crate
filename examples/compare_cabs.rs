@@ -1,5 +1,3 @@
-/// Compare valid.cab (makecab) with our cabinet format
-use std::io::Read;
 
 fn parse_cab(label: &str, buf: &[u8]) {
     println!("\n=== {} ({} bytes) ===", label, buf.len());

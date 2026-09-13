@@ -7,7 +7,7 @@ fn main() {
                   "{12345678-1234-1234-1234-123456789ABC}",
                   "{AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA}"] {
         let _ = std::process::Command::new("msiexec")
-            .args(&["/x", code, "/qn", "/norestart"]).output();
+            .args(["/x", code, "/qn", "/norestart"]).output();
     }
     std::thread::sleep(std::time::Duration::from_secs(1));
 
@@ -163,7 +163,7 @@ fn main() {
     println!("MSI: {} bytes", msi.len());
 
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", "test_install.msi", "/qn", "/l*v", "test_install_log.txt"])
+        .args(["/i", "test_install.msi", "/qn", "/l*v", "test_install_log.txt"])
         .output().unwrap();
     let exit_code = output.status.code().unwrap_or(-1);
     println!("Exit code: {}", exit_code);

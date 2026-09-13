@@ -154,7 +154,7 @@ fn test_msi(path: &str, log_name: &str) -> i32 {
     let log = format!("{}.log", log_name);
     let _ = std::fs::remove_file(&log);
     let output = Command::new("msiexec")
-        .args(&["/i", path, "/qn", "/norestart", "/lv", &log])
+        .args(["/i", path, "/qn", "/norestart", "/lv", &log])
         .output()
         .expect("msiexec failed");
     let code = output.status.code().unwrap_or(-1);

@@ -10,7 +10,7 @@ fn main() {
 
     // Kill any stale msiexec processes
     let _ = std::process::Command::new("taskkill")
-        .args(&["/F", "/IM", "msiexec.exe"])
+        .args(["/F", "/IM", "msiexec.exe"])
         .output();
     std::thread::sleep(std::time::Duration::from_secs(2));
 
@@ -219,7 +219,7 @@ fn main() {
     println!("[3i] InstallUISequence table: 3 rows");
 
     // --- Build the MSI ---
-    let mut msi_data = builder.build().unwrap();
+    let msi_data = builder.build().unwrap();
     println!("\n[4] MSI built: {} bytes", msi_data.len());
 
     // Step 5: Embed cabinet into the MSI using cfb crate
@@ -257,7 +257,7 @@ fn main() {
 
     // Step 8: Clean up any previous install
     let _ = std::process::Command::new("msiexec")
-        .args(&["/x", product_code, "/qn"])
+        .args(["/x", product_code, "/qn"])
         .output();
     std::thread::sleep(std::time::Duration::from_secs(2));
 
@@ -270,7 +270,7 @@ fn main() {
     let _ = std::fs::remove_file(log_path);
 
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", out_path, "/qn", "/l*v", log_path])
+        .args(["/i", out_path, "/qn", "/l*v", log_path])
         .output()
         .expect("Failed to run msiexec");
     let exit_code = output.status.code().unwrap_or(-1);
@@ -319,7 +319,7 @@ fn main() {
     if exit_code == 0 {
         println!("\n=== msiexec uninstall test ===");
         let output = std::process::Command::new("msiexec")
-            .args(&["/x", product_code, "/qn", "/l*v", "C:\\temp\\velocity_def_uninstall.log"])
+            .args(["/x", product_code, "/qn", "/l*v", "C:\\temp\\velocity_def_uninstall.log"])
             .output()
             .expect("Failed to run msiexec");
         let uninst_code = output.status.code().unwrap_or(-1);
@@ -339,7 +339,7 @@ fn main() {
     println!("\n=== DONE ===");
 }
 
-fn create_cabinet(cab_path: &str, source_dir: &str, files: &[&str]) {
+fn create_cabinet(_cab_path: &str, source_dir: &str, files: &[&str]) {
     let ddf_path = "C:\\temp\\velo_def_cabinet.ddf";
     let mut ddf = String::new();
     ddf.push_str(&format!(".Set CabinetName1={}\n", "velo_data.cab"));
@@ -352,7 +352,7 @@ fn create_cabinet(cab_path: &str, source_dir: &str, files: &[&str]) {
     std::fs::write(ddf_path, &ddf).unwrap();
 
     let output = std::process::Command::new("makecab")
-        .args(&["/f", ddf_path])
+        .args(["/f", ddf_path])
         .output()
         .expect("Failed to run makecab");
 

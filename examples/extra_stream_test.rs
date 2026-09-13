@@ -78,7 +78,7 @@ fn main() {
     
     // Test with msiexec
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", path, "/qn", "/norestart"])
+        .args(["/i", path, "/qn", "/norestart"])
         .output().unwrap();
     let code = output.status.code().unwrap_or(-1);
     println!("\nmsiexec exit code: {}", code);
@@ -86,7 +86,7 @@ fn main() {
     if code == 0 {
         println!("SUCCESS!");
         let _ = std::process::Command::new("msiexec")
-            .args(&["/x", path, "/qn", "/norestart"]).output();
+            .args(["/x", path, "/qn", "/norestart"]).output();
     } else {
         println!("FAILED");
     }

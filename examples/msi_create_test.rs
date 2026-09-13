@@ -9,7 +9,7 @@ fn main() {
     println!("=== MSI CRATE CREATE TEST ===\n");
 
     let _ = std::process::Command::new("taskkill")
-        .args(&["/F", "/IM", "msiexec.exe"]).output();
+        .args(["/F", "/IM", "msiexec.exe"]).output();
     std::thread::sleep(std::time::Duration::from_secs(1));
 
     let out_path = "C:\\temp\\msi_crate_create.msi";
@@ -44,8 +44,8 @@ fn main() {
             vec![msi::Value::Str("ProductName".into()), msi::Value::Str("Velocity Test".into())],
             vec![msi::Value::Str("ProductVersion".into()), msi::Value::Str("1.0.0".into())],
             vec![msi::Value::Str("Manufacturer".into()), msi::Value::Str("Velocity Corp".into())],
-            vec![msi::Value::Str("ProductCode".into()), msi::Value::Str(product_code.into())],
-            vec![msi::Value::Str("UpgradeCode".into()), msi::Value::Str(upgrade_code.into())],
+            vec![msi::Value::Str("ProductCode".into()), msi::Value::Str(product_code)],
+            vec![msi::Value::Str("UpgradeCode".into()), msi::Value::Str(upgrade_code)],
             vec![msi::Value::Str("ProductLanguage".into()), msi::Value::Str("1033".into())],
         ];
         match pkg.insert_rows(msi::Insert::into("Property").rows(rows)) {
@@ -80,7 +80,7 @@ fn main() {
     println!("\n--- Testing with msiexec ---");
     let _ = std::fs::remove_file("C:\\temp\\msi_create.log");
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", out_path, "/qn", "/l*v", "C:\\temp\\msi_create.log"])
+        .args(["/i", out_path, "/qn", "/l*v", "C:\\temp\\msi_create.log"])
         .output().unwrap();
     let exit_code = output.status.code().unwrap_or(-1);
     println!("Exit code: {}", exit_code);

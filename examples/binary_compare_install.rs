@@ -336,7 +336,7 @@ fn main() {
     println!("\n=== Testing reference MSI ===");
     let _ = std::fs::remove_dir_all("C:\\VelTest");
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", "ref_install.msi", "/qn", "/l*v", "ref_install_log.txt"])
+        .args(["/i", "ref_install.msi", "/qn", "/l*v", "ref_install_log.txt"])
         .output().unwrap();
     println!("ref msiexec exit: {}", output.status.code().unwrap_or(-1));
     if std::path::Path::new("C:\\VelTest\\hello.txt").exists() {

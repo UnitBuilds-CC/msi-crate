@@ -5,7 +5,7 @@ use std::process::Command;
 fn main() {
     println!("=== RESAVE TEST ===\n");
 
-    let _ = Command::new("taskkill").args(&["/F", "/IM", "msiexec.exe"]).output();
+    let _ = Command::new("taskkill").args(["/F", "/IM", "msiexec.exe"]).output();
     std::thread::sleep(std::time::Duration::from_secs(1));
 
     // Build our MSI with Property + Directory + InstallExecuteSequence
@@ -107,16 +107,16 @@ fn main() {
     
     // Cleanup
     if code_our == 0 {
-        let _ = Command::new("msiexec").args(&["/x", our_path, "/qn", "/norestart"]).output();
+        let _ = Command::new("msiexec").args(["/x", our_path, "/qn", "/norestart"]).output();
     }
     if code_resave == 0 {
-        let _ = Command::new("msiexec").args(&["/x", resave_path, "/qn", "/norestart"]).output();
+        let _ = Command::new("msiexec").args(["/x", resave_path, "/qn", "/norestart"]).output();
     }
 }
 
 fn test_msiexec(path: &str, log: &str) -> i32 {
     let output = Command::new("msiexec")
-        .args(&["/i", path, "/qn", "/norestart", "/l*v", log])
+        .args(["/i", path, "/qn", "/norestart", "/l*v", log])
         .output()
         .expect("msiexec failed");
     let code = output.status.code().unwrap_or(-1);

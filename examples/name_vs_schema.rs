@@ -135,11 +135,11 @@ fn test_config(template_data: &[u8], product_code: &str, label: &str, setup: imp
     std::fs::write(out_path, &msi_data).unwrap();
 
     let _ = std::process::Command::new("msiexec")
-        .args(&["/x", &format!("{{{}}}", product_code), "/qn"]).output();
+        .args(["/x", &format!("{{{}}}", product_code), "/qn"]).output();
     std::thread::sleep(std::time::Duration::from_secs(1));
 
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", out_path, "/qn"]).output().expect("msiexec");
+        .args(["/i", out_path, "/qn"]).output().expect("msiexec");
     let code = output.status.code().unwrap_or(-1);
     let status = match code { 0 => "OK", 1620 => "1620", 1603 => "1603", _ => "?" };
     println!("  {} -> exit {} ({})", label, code, status);

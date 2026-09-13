@@ -10,7 +10,7 @@ fn main() {
     println!("=== SURGICAL TABLE REPLACEMENT TEST ===\n");
 
     let _ = std::process::Command::new("taskkill")
-        .args(&["/F", "/IM", "msiexec.exe"]).output();
+        .args(["/F", "/IM", "msiexec.exe"]).output();
     std::thread::sleep(std::time::Duration::from_secs(2));
 
     let template_path = "C:\\Program Files\\Microsoft Office\\root\\Integration\\C2RIntLoc.en-us.16.msi";
@@ -36,7 +36,7 @@ fn main() {
     // Identify system vs user streams
     // System streams: _Tables, _Columns, _Validation, _StringPool, _StringData, SummaryInformation, DigitalSignature, MsiDigitalSignatureEx
     // User streams: encoded table names (all start with the table prefix \u{4840})
-    let system_stream_names = [
+    let _system_stream_names = [
         "\u{0005}SummaryInformation",
         "\u{0005}DigitalSignature",
         "\u{0005}MsiDigitalSignatureEx",
@@ -86,7 +86,7 @@ fn main() {
                 s.read_to_end(&mut d).unwrap();
                 let safe: String = name.chars().map(|c| if c.is_ascii() && !c.is_control() { c } else { '.' }).collect();
                 println!("Our stream: {} ({} bytes)", safe, d.len());
-                if name == &our_names.iter().find(|n| !n.starts_with('\u{4840}') && !n.starts_with('\u{0005}')).unwrap() {
+                if name == our_names.iter().find(|n| !n.starts_with('\u{4840}') && !n.starts_with('\u{0005}')).unwrap() {
                     prop_data = Some((name.clone(), d));
                 }
             }
@@ -134,7 +134,7 @@ fn main() {
     println!("\n--- Testing surgical MSI (template + our Property stream) ---");
     let _ = std::fs::remove_file("C:\\temp\\surgical.log");
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", out_path, "/qn", "/l*v", "C:\\temp\\surgical.log"])
+        .args(["/i", out_path, "/qn", "/l*v", "C:\\temp\\surgical.log"])
         .output().unwrap();
     let exit_code = output.status.code().unwrap_or(-1);
     println!("Exit code: {}", exit_code);
@@ -172,7 +172,7 @@ fn main() {
     println!("\n--- Testing baseline (pure template roundtrip, no changes) ---");
     let _ = std::fs::remove_file("C:\\temp\\surgical_baseline.log");
     let output2 = std::process::Command::new("msiexec")
-        .args(&["/i", out_path2, "/qn", "/l*v", "C:\\temp\\surgical_baseline.log"])
+        .args(["/i", out_path2, "/qn", "/l*v", "C:\\temp\\surgical_baseline.log"])
         .output().unwrap();
     let exit2 = output2.status.code().unwrap_or(-1);
     println!("Exit code: {}", exit2);

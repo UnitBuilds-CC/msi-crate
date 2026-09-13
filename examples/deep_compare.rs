@@ -198,7 +198,7 @@ fn main() {
     std::fs::write("deep_diag_ref.msi", &ref_data).unwrap();
     let _ = std::fs::remove_file("deep_diag_ref.log");
     let output = Command::new("msiexec")
-        .args(&["/i", "deep_diag_ref.msi", "/qn", "/norestart", "/lv", "deep_diag_ref.log"])
+        .args(["/i", "deep_diag_ref.msi", "/qn", "/norestart", "/lv", "deep_diag_ref.log"])
         .output().expect("msiexec");
     println!("\nReference MSI msiexec exit: {}", output.status.code().unwrap_or(-1));
     if let Ok(log) = std::fs::read_to_string("deep_diag_ref.log") {

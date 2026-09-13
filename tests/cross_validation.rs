@@ -86,8 +86,8 @@ fn test_cfb_can_open_generated_msi() {
     // Verify version
     assert_eq!(
         comp.version(),
-        cfb::Version::V4,
-        "cfb should detect V4 format"
+        cfb::Version::V3,
+        "cfb should detect V3 format (512-byte sectors, as required by MSI)"
     );
 }
 
@@ -175,7 +175,7 @@ fn test_cfb_summary_info_stream_exists() {
 
     let entry = summary_entry.unwrap();
     assert!(entry.is_stream());
-    assert!(entry.len() > 0, "SummaryInformation should have content");
+    assert!(!entry.is_empty(), "SummaryInformation should have content");
 
     // Read the SummaryInformation data via cfb
     let path = entry.path().to_string_lossy().to_string();
@@ -198,10 +198,12 @@ fn test_cfb_large_stream_round_trip() {
     let cursor = Cursor::new(&msi_data);
     let mut comp = CompoundFile::open(cursor).unwrap();
 
-    // Find the "test.cab" stream
+    // Extra streams are stored with MSI base-64 Unicode encoding (is_table=false).
+    // Look up by the encoded name, not the plain ASCII name.
+    let encoded_name = velocity_msi::encode_stream_name("test.cab", false);
     let cab_entry = comp
         .walk()
-        .find(|e| e.name() == "test.cab");
+        .find(|e| e.name() == encoded_name);
 
     assert!(
         cab_entry.is_some(),
@@ -262,10 +264,11 @@ fn test_cfb_small_stream_round_trip() {
     let cursor = Cursor::new(&msi_data);
     let mut comp = CompoundFile::open(cursor).unwrap();
 
-    // Find and read back the small stream
+    // Extra streams are stored with MSI base-64 Unicode encoding (is_table=false).
+    let encoded_name = velocity_msi::encode_stream_name("marker.dat", false);
     let entry = comp
         .walk()
-        .find(|e| e.name() == "marker.dat")
+        .find(|e| e.name() == encoded_name)
         .expect("Should find marker.dat stream");
 
     assert_eq!(entry.len(), 6, "Stream size should be 6 bytes");
@@ -337,11 +340,13 @@ fn test_cfb_multiple_extra_streams_round_trip() {
     let mut comp = CompoundFile::open(cursor).unwrap();
 
     // Verify each stream round-trips correctly
+    // Extra streams are stored with MSI base-64 Unicode encoding (is_table=false).
     for (name, expected) in &streams_data {
+        let encoded_name = velocity_msi::encode_stream_name(name, false);
         let entry = comp
             .walk()
-            .find(|e| e.name() == *name)
-            .unwrap_or_else(|| panic!("Should find stream '{}'", name));
+            .find(|e| e.name() == encoded_name)
+            .unwrap_or_else(|| panic!("Should find stream '{}' (encoded: '{}')", name, encoded_name));
 
         assert_eq!(
             entry.len(),

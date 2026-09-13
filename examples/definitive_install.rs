@@ -30,9 +30,9 @@ fn main() {
 
     // ── Directory table ─────────────────────────────────────────
     builder.create_table("Directory", vec![
-        Column::build("Directory").string(72).primary_key().build(),
-        Column::build("Directory_Parent").string(72).nullable().build(),
-        Column::build("DefaultDir").string(255).primary_key().build(),
+        Column::build("Directory").string(72).primary_key().category("Identifier").build(),
+        Column::build("Directory_Parent").string(72).nullable().foreign_key("Directory", 1).category("Identifier").build(),
+        Column::build("DefaultDir").string(255).primary_key().category("DefaultDir").build(),
     ]).unwrap();
     builder.insert_rows("Directory", vec![
         vec![Value::from("TARGETDIR"), Value::Null, Value::from("SourceDir")],
@@ -41,12 +41,12 @@ fn main() {
 
     // ── Component table ─────────────────────────────────────────
     builder.create_table("Component", vec![
-        Column::build("Component").string(72).primary_key().build(),
-        Column::build("ComponentId").string(38).nullable().build(),
-        Column::build("Directory_").string(72).build(),
+        Column::build("Component").string(72).primary_key().category("Identifier").build(),
+        Column::build("ComponentId").string(38).nullable().category("Guid").build(),
+        Column::build("Directory_").string(72).foreign_key("Directory", 1).category("Identifier").build(),
         Column::build("Attributes").int16().build(),
-        Column::build("Condition").string(255).nullable().build(),
-        Column::build("KeyPath").string(72).nullable().build(),
+        Column::build("Condition").string(255).nullable().category("Condition").build(),
+        Column::build("KeyPath").string(72).nullable().category("Identifier").build(),
     ]).unwrap();
     builder.insert_rows("Component", vec![
         vec![Value::from("MainComp"), Value::Null, Value::from("INSTALLDIR"),
@@ -55,12 +55,12 @@ fn main() {
 
     // ── File table (8 columns) ──────────────────────────────────
     builder.create_table("File", vec![
-        Column::build("File").string(72).primary_key().build(),
-        Column::build("Component_").string(72).build(),
-        Column::build("FileName").string(255).build(),
+        Column::build("File").string(72).primary_key().category("Identifier").build(),
+        Column::build("Component_").string(72).foreign_key("Component", 1).category("Identifier").build(),
+        Column::build("FileName").string(255).category("Filename").build(),
         Column::build("FileSize").int32().build(),
-        Column::build("Version").string(72).nullable().build(),
-        Column::build("Language").string(20).nullable().build(),
+        Column::build("Version").string(72).nullable().category("Version").build(),
+        Column::build("Language").string(20).nullable().category("Language").build(),
         Column::build("Attributes").int16().nullable().build(),
         Column::build("Sequence").int16().build(),
     ]).unwrap();
@@ -89,8 +89,8 @@ fn main() {
 
     // ── FeatureComponents table ─────────────────────────────────
     builder.create_table("FeatureComponents", vec![
-        Column::build("Feature_").string(38).primary_key().build(),
-        Column::build("Component_").string(72).primary_key().build(),
+        Column::build("Feature_").string(38).primary_key().foreign_key("Feature", 1).category("Identifier").build(),
+        Column::build("Component_").string(72).primary_key().foreign_key("Component", 1).category("Identifier").build(),
     ]).unwrap();
     builder.insert_rows("FeatureComponents", vec![
         vec![Value::from("Complete"), Value::from("MainComp")],
@@ -157,7 +157,7 @@ fn main() {
     // ── Test with msiexec ───────────────────────────────────────
     println!("\n=== Installing ===");
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", "velocity_install_test.msi", "/qn", "/l*v", "install_log.txt"])
+        .args(["/i", "velocity_install_test.msi", "/qn", "/l*v", "install_log.txt"])
         .output().unwrap();
     let exit_code = output.status.code().unwrap_or(-1);
     println!("msiexec /i exit code: {}", exit_code);
@@ -185,10 +185,8 @@ fn main() {
         println!("\nFAIL: File NOT found at {}", installed_path);
         if let Ok(entries) = std::fs::read_dir("C:\\VelTest") {
             println!("Contents of C:\\VelTest:");
-            for entry in entries {
-                if let Ok(e) = entry {
-                    println!("  {}", e.path().display());
-                }
+            for e in entries.flatten() {
+                println!("  {}", e.path().display());
             }
         } else {
             println!("C:\\VelTest directory does not exist");
@@ -199,7 +197,7 @@ fn main() {
     if exit_code == 0 {
         println!("\n=== Uninstalling ===");
         let output = std::process::Command::new("msiexec")
-            .args(&["/x", product_code, "/qn", "/l*v", "uninstall_log.txt"])
+            .args(["/x", product_code, "/qn", "/l*v", "uninstall_log.txt"])
             .output().unwrap();
         println!("msiexec /x exit code: {}", output.status.code().unwrap_or(-1));
 

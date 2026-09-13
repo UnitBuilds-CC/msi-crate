@@ -208,11 +208,18 @@ impl MsiBuilder {
                             self.string_pool.intern(c);
                             Value::Str(c.clone())
                         });
+                        let key_table_val = col.key_table.as_ref().map(|kt| {
+                            self.string_pool.intern(kt);
+                            Value::Str(kt.clone())
+                        });
+                        let key_col_val = col.key_column.map(|kc| Value::Int(kc as i32));
                         validation.add_row(vec![
                             Value::Str(table_name.clone()),
                             Value::Str(col.name.clone()),
                             Value::Str(nullable.to_string()),
-                            Value::Null, Value::Null, Value::Null, Value::Null,
+                            Value::Null, Value::Null,
+                            key_table_val.unwrap_or(Value::Null),
+                            key_col_val.unwrap_or(Value::Null),
                             category_val.unwrap_or(Value::Null), Value::Null, Value::Null,
                         ])?;
                     }
@@ -381,19 +388,19 @@ impl MsiBuilder {
             Value::Null, Value::Null, Value::Null, Value::Null,
             Value::Null, Value::Str("Y;N".to_string()), Value::Null,
         ])?;
-        // _Validation.MinValue: nullable int32
+        // _Validation.MinValue: nullable int32, range is full int32
         validation_table.add_row(vec![
             Value::Str("_Validation".to_string()),
             Value::Str("MinValue".to_string()),
             Value::Str("Y".to_string()),
-            Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null,
+            Value::Int(-2147483647), Value::Int(2147483647), Value::Null, Value::Null, Value::Null, Value::Null, Value::Null,
         ])?;
-        // _Validation.MaxValue: nullable int32
+        // _Validation.MaxValue: nullable int32, range is full int32
         validation_table.add_row(vec![
             Value::Str("_Validation".to_string()),
             Value::Str("MaxValue".to_string()),
             Value::Str("Y".to_string()),
-            Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null,
+            Value::Int(-2147483647), Value::Int(2147483647), Value::Null, Value::Null, Value::Null, Value::Null, Value::Null,
         ])?;
         // _Validation.KeyTable: id_string(255) → category=Identifier
         validation_table.add_row(vec![
@@ -403,12 +410,12 @@ impl MsiBuilder {
             Value::Null, Value::Null, Value::Null, Value::Null,
             Value::Str("Identifier".to_string()), Value::Null, Value::Null,
         ])?;
-        // _Validation.KeyColumn: nullable int16
+        // _Validation.KeyColumn: nullable int16, range 1..32
         validation_table.add_row(vec![
             Value::Str("_Validation".to_string()),
             Value::Str("KeyColumn".to_string()),
             Value::Str("Y".to_string()),
-            Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null, Value::Null,
+            Value::Int(1), Value::Int(32), Value::Null, Value::Null, Value::Null, Value::Null, Value::Null,
         ])?;
         // _Validation.Category: enum_values(all_categories) → Set=long list
         validation_table.add_row(vec![

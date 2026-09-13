@@ -37,7 +37,7 @@ fn main() {
                 }
             }
         }
-        if size > 100 && buf.iter().take(50).all(|&b| b >= 0x20 && b < 0x7f) {
+        if size > 100 && buf.iter().take(50).all(|&b| (0x20..0x7f).contains(&b)) {
             println!("Found _StringData: {} bytes", size);
             string_data = Some(buf);
         }

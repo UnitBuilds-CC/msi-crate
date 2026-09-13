@@ -15,7 +15,7 @@ fn main() {
     ]).unwrap();
 
     let product_code = "{12345678-1234-1234-1234-123456789ABC}";
-    let upgrade_code = "{ABCDEFGH-ABCD-ABCD-ABCD-ABCDEFGHIJKL}";
+    let _upgrade_code = "{ABCDEFGH-ABCD-ABCD-ABCD-ABCDEFGHIJKL}";
     // Fix: use proper GUID format
     let upgrade_code = "{87654321-4321-4321-4321-CBA987654321}";
 
@@ -164,7 +164,7 @@ fn main() {
     // Test with msiexec
     println!("\n=== msiexec install test ===");
     let output = std::process::Command::new("msiexec")
-        .args(&[
+        .args([
             "/i", "complete_test.msi",
             "/qn",
             "/l*v", "complete_test_log.txt",
@@ -201,7 +201,7 @@ fn main() {
         // Try uninstall
         println!("\n=== msiexec uninstall test ===");
         let output = std::process::Command::new("msiexec")
-            .args(&[
+            .args([
                 "/x", product_code,
                 "/qn",
                 "/l*v", "complete_uninstall_log.txt",
@@ -220,7 +220,8 @@ fn main() {
 
         // Cleanup
         let _ = std::fs::remove_dir_all("C:\\VelocityTestOutput");
-        for f in &["complete_uninstall_log.txt"] {
+        {
+            let f = &"complete_uninstall_log.txt";
             let _ = std::fs::remove_file(f);
         }
     } else {

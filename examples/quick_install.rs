@@ -112,7 +112,7 @@ fn main() {
     println!("MSI: {} bytes", msi.len());
 
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", "test_install.msi", "/qn", "/l*v", "test_install_log.txt"])
+        .args(["/i", "test_install.msi", "/qn", "/l*v", "test_install_log.txt"])
         .output().unwrap();
     println!("Exit: {}", output.status.code().unwrap_or(-1));
 

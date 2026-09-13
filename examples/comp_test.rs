@@ -217,7 +217,7 @@ fn test_full_install() {
 fn run_msi(path: &str, label: &str) {
     let _ = std::fs::remove_dir_all("C:\\VelTest");
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", path, "/qn", "/l*v", &format!("{}.log", path.replace(".msi", ""))])
+        .args(["/i", path, "/qn", "/l*v", &format!("{}.log", path.replace(".msi", ""))])
         .output().unwrap();
     let exit = output.status.code().unwrap_or(-1);
     println!("{:40} exit={}", label, exit);

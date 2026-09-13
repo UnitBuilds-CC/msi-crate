@@ -59,7 +59,7 @@ fn main() {
     // Test with msiexec
     let _ = std::fs::remove_file("diag_fresh.log");
     let output = Command::new("msiexec")
-        .args(&["/i", "diag_fresh.msi", "/qn", "/norestart", "/lv", "diag_fresh.log"])
+        .args(["/i", "diag_fresh.msi", "/qn", "/norestart", "/lv", "diag_fresh.log"])
         .output()
         .expect("msiexec failed");
     let exit_code = output.status.code().unwrap_or(-1);
@@ -84,9 +84,9 @@ fn main() {
         let lines: Vec<&str> = log.lines().collect();
         for (i, line) in lines.iter().enumerate() {
             if line.contains("return value 3") {
-                let start = if i > 30 { i - 30 } else { 0 };
-                for j in start..=i {
-                    println!("  {}", lines[j].trim());
+                let start = i.saturating_sub(30);
+                for line in &lines[start..=i] {
+                    println!("  {}", line.trim());
                 }
                 break;
             }
@@ -103,16 +103,16 @@ fn main() {
 
         // Read current Directory data
         println!("Reading Directory table...");
-        let mut rows = pkg.select_rows(msi::Select::table("Directory")).unwrap();
+        let rows = pkg.select_rows(msi::Select::table("Directory")).unwrap();
         for row in rows {
-            println!("  {:?} {:?} {:?}", &row[0], &row[1], &row[2]);
+            println!("  {:?} {:?} {:?}", row[0], row[1], row[2]);
         }
 
         // Read _Tables
         println!("\nReading _Tables...");
-        let mut rows = pkg.select_rows(msi::Select::table("_Tables")).unwrap();
+        let rows = pkg.select_rows(msi::Select::table("_Tables")).unwrap();
         for row in rows {
-            println!("  {:?}", &row[0]);
+            println!("  {:?}", row[0]);
         }
 
         // Drop and recreate Directory
@@ -136,7 +136,7 @@ fn main() {
     // Test modified MSI
     let _ = std::fs::remove_file("diag_fresh_mod.log");
     let output2 = Command::new("msiexec")
-        .args(&["/i", "diag_fresh.msi", "/qn", "/norestart", "/lv", "diag_fresh_mod.log"])
+        .args(["/i", "diag_fresh.msi", "/qn", "/norestart", "/lv", "diag_fresh_mod.log"])
         .output()
         .expect("msiexec failed");
     let exit_code2 = output2.status.code().unwrap_or(-1);

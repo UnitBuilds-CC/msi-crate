@@ -4,6 +4,7 @@ use std::process::Command;
 use velocity_msi::{MsiBuilder, Column, Value, CabinetFile, build_cabinet};
 
 fn build_base_msi(extra_tables: &[(&str, Vec<Column>, Vec<Vec<Value>>)]) -> Vec<u8> {
+    #![allow(clippy::type_complexity)]
     let test_content = b"Hello from Velocity MSI!";
     let test_file_name = "velocity_test.txt";
 
@@ -147,7 +148,7 @@ fn test_msi(name: &str, msi_data: &[u8]) -> i32 {
     let install_dir = format!("C:\\temp\\vel_msi_install\\{}", name);
     let log_path = format!("{}\\{}.log", msi_dir, name);
     let status = Command::new("msiexec")
-        .args(&["/i", &path, "/qn", "/l*v", &log_path, &format!("TARGETDIR={}", install_dir)])
+        .args(["/i", &path, "/qn", "/l*v", &log_path, &format!("TARGETDIR={}", install_dir)])
         .status().unwrap();
     let code = status.code().unwrap_or(-1);
     println!("  {} => exit code: {}", name, code);
@@ -164,7 +165,7 @@ fn test_msi(name: &str, msi_data: &[u8]) -> i32 {
     }
     
     if code == 0 {
-        let _ = Command::new("msiexec").args(&["/x", &path, "/qn"]).status();
+        let _ = Command::new("msiexec").args(["/x", &path, "/qn"]).status();
     }
     let _ = std::fs::remove_dir_all(&install_dir);
     code

@@ -299,7 +299,7 @@ fn main() {
     // Test with msiexec
     println!("\nTesting with msiexec...");
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", path, "/qn", "/l*v", log_path])
+        .args(["/i", path, "/qn", "/l*v", log_path])
         .output()
         .expect("msiexec");
     let exit_code = output.status.code().unwrap_or(-1);
@@ -325,7 +325,7 @@ fn main() {
         // Uninstall
         println!("\nUninstalling...");
         let uninst = std::process::Command::new("msiexec")
-            .args(&["/x", &product_code, "/qn"])
+            .args(["/x", &product_code, "/qn"])
             .output()
             .expect("uninstall");
         println!("Uninstall exit code: {}", uninst.status.code().unwrap_or(-1));

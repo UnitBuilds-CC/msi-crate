@@ -97,7 +97,7 @@ fn main() {
     // Test with msiexec
     println!("\nTest 1: Basic MSI (Property only)");
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", path, "/qn", "/l*v", log_path])
+        .args(["/i", path, "/qn", "/l*v", log_path])
         .output().expect("msiexec");
     let ec = output.status.code().unwrap_or(-1);
     println!("Exit code: {}", ec);
@@ -114,7 +114,7 @@ fn main() {
     // Uninstall if success
     if ec == 0 {
         let _ = std::process::Command::new("msiexec")
-            .args(&["/x", &pc, "/qn"]).output();
+            .args(["/x", &pc, "/qn"]).output();
     }
 
     // Test 2: Also test V4 directly (without repackaging)
@@ -123,7 +123,7 @@ fn main() {
     let _ = std::fs::remove_file(path_v4);
     std::fs::write(path_v4, &v4_data).expect("write v4");
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", path_v4, "/qn"]).output().expect("msiexec");
+        .args(["/i", path_v4, "/qn"]).output().expect("msiexec");
     let ec_v4 = output.status.code().unwrap_or(-1);
     println!("Exit code: {}", ec_v4);
 

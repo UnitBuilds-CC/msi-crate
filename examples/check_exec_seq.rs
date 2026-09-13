@@ -56,7 +56,7 @@ fn main() {
     
     // Also search for cabinet-related stream names in UTF-16LE
     println!("=== UTF-16LE stream name search ===");
-    let cab_name = "\u{0084}V\0e\0l\0o\0c\0i\0t\0y\0";
+    let _cab_name = "\u{0084}V\0e\0l\0o\0c\0i\0t\0y\0";
     for i in 0..msi_data.len().saturating_sub(4) {
         // Look for the \x84 prefix byte followed by 'V' in UTF-16LE
         if msi_data[i] == 0x84 && i + 1 < msi_data.len() && msi_data[i+1] == 0x00 

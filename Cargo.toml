@@ -2,14 +2,15 @@
 name = "velocity-msi"
 version = "0.1.0"
 edition = "2021"
-authors = ["Velocity Team"]
-description = "Clean-room MSI package generator for Velocity Installer"
+authors = ["UnitBuilds <ian@unitbuilds.com>"]
+description = "Clean-room MSI (Windows Installer) package generator with a from-scratch OLE V3 compound file writer. No external OLE dependencies."
 license = "MIT OR Apache-2.0"
+repository = "https://github.com/UnitBuilds-CC/msi-crate"
+keywords = ["msi", "windows-installer", "ole", "compound-file", "installer"]
+categories = ["encoding", "filesystem"]
+readme = "README.md"
 
 [dependencies]
-# Windows-1252 encoding
-encoding_rs = "0.8"
-
 # Timestamps
 chrono = "0.4"
 

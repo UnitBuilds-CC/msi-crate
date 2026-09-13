@@ -145,7 +145,7 @@ fn main() {
     println!("\n=== Testing standalone cabinet ===");
     let _ = std::fs::remove_dir_all("debug_cab_output");
     let output = std::process::Command::new("expand")
-        .args(&["debug_vel.cab", "-F:*", "debug_cab_output"])
+        .args(["debug_vel.cab", "-F:*", "debug_cab_output"])
         .output();
     match output {
         Ok(o) => {

@@ -52,13 +52,13 @@ fn main() {
     std::fs::write(path1, &msi_data).unwrap();
     println!("Test 1: Original MSI (no extra stream)");
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", path1, "/qn"]).output().unwrap();
+        .args(["/i", path1, "/qn"]).output().unwrap();
     let ec1 = output.status.code().unwrap_or(-1);
     println!("  Exit code: {} (0=success)", ec1);
     
     // Uninstall
     let _ = std::process::Command::new("msiexec")
-        .args(&["/x", &product_code, "/qn"]).output();
+        .args(["/x", &product_code, "/qn"]).output();
     
     // Test 2: Add a dummy stream using cfb
     let pc2 = make_uuid();
@@ -98,13 +98,13 @@ fn main() {
     std::fs::write(path2, &buf).unwrap();
     println!("\nTest 2: MSI with dummy stream added via cfb");
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", path2, "/qn"]).output().unwrap();
+        .args(["/i", path2, "/qn"]).output().unwrap();
     let ec2 = output.status.code().unwrap_or(-1);
     println!("  Exit code: {} (0=success)", ec2);
     
     // Uninstall
     let _ = std::process::Command::new("msiexec")
-        .args(&["/x", &pc2, "/qn"]).output();
+        .args(["/x", &pc2, "/qn"]).output();
     
     // Test 3: Add cabinet stream using cfb to a working MSI (no Media table)
     let pc3 = make_uuid();
@@ -144,13 +144,13 @@ fn main() {
     std::fs::write(path3, &buf3).unwrap();
     println!("\nTest 3: MSI with cabinet stream but NO Media table");
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", path3, "/qn"]).output().unwrap();
+        .args(["/i", path3, "/qn"]).output().unwrap();
     let ec3 = output.status.code().unwrap_or(-1);
     println!("  Exit code: {} (0=success)", ec3);
     
     // Uninstall
     let _ = std::process::Command::new("msiexec")
-        .args(&["/x", &pc3, "/qn"]).output();
+        .args(["/x", &pc3, "/qn"]).output();
     
     println!("\n=== RESULTS ===");
     println!("Test 1 (no extra stream): {}", if ec1 == 0 { "PASS" } else { "FAIL" });

@@ -322,7 +322,7 @@ fn main() {
 
     // Cabinet
     let mut cab_files = Vec::new();
-    for (i, fname) in file_names.iter().enumerate() {
+    for (i, _fname) in file_names.iter().enumerate() {
         cab_files.push(CabinetFile {
             name: format!("file_{}", i),
             data: vec![0u8; 1024],
@@ -340,7 +340,7 @@ fn main() {
     // Test with msiexec
     let log = "replicate_compiler.log";
     let status = Command::new("msiexec.exe")
-        .args(&["/i", outpath, "/qn", "/l*v", log])
+        .args(["/i", outpath, "/qn", "/l*v", log])
         .status()
         .unwrap();
     let code = status.code().unwrap_or(-1);
@@ -357,7 +357,7 @@ fn main() {
 
     if code == 0 {
         let _ = Command::new("msiexec.exe")
-            .args(&["/x", product_code, "/qn"])
+            .args(["/x", product_code, "/qn"])
             .status();
     }
 }

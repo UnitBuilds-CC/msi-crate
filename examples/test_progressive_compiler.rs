@@ -124,7 +124,7 @@ fn test_msi(b: &mut MsiBuilder, label: &str, phase: &mut i32) -> bool {
             std::fs::write(&filename, &msi).unwrap();
             let log = format!("progressive_phase{}.log", phase);
             let status = Command::new("msiexec.exe")
-                .args(&["/i", &filename, "/qn", "/l*v", &log])
+                .args(["/i", &filename, "/qn", "/l*v", &log])
                 .status()
                 .unwrap();
             let code = status.code().unwrap_or(-1);
@@ -143,7 +143,7 @@ fn test_msi(b: &mut MsiBuilder, label: &str, phase: &mut i32) -> bool {
             // Uninstall if successful
             if ok {
                 let _ = Command::new("msiexec.exe")
-                    .args(&["/x", "{D5E0EEC4-CF5C-5D68-BAC7-AA26667F6C80}", "/qn"])
+                    .args(["/x", "{D5E0EEC4-CF5C-5D68-BAC7-AA26667F6C80}", "/qn"])
                     .status();
             }
             *phase += 1;

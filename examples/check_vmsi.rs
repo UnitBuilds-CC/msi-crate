@@ -27,7 +27,7 @@ fn main() {
     // Test with msiexec
     let _ = std::fs::remove_file("C:\\temp\\velocity_test.log");
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", path, "/qn", "/l*v", "C:\\temp\\velocity_test.log"])
+        .args(["/i", path, "/qn", "/l*v", "C:\\temp\\velocity_test.log"])
         .output().unwrap();
     let exit_code = output.status.code().unwrap_or(-1);
     println!("msiexec exit code: {}", exit_code);

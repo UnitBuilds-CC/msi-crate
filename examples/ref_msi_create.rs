@@ -92,7 +92,7 @@ fn create_msi(path: &str) -> Result<(), Box<dyn std::error::Error>> {
 fn test_msi(path: &str, label: &str) {
     let _ = std::fs::remove_dir_all("C:\\VelTest");
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", path, "/qn", "/l*v", &format!("{}.log", label)])
+        .args(["/i", path, "/qn", "/l*v", &format!("{}.log", label)])
         .output().unwrap();
     let exit = output.status.code().unwrap_or(-1);
     println!("msiexec exit={}", exit);

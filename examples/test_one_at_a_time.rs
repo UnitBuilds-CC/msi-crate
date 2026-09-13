@@ -125,7 +125,7 @@ fn main() {
 
     let log = "C:\\temp\\vel_msi_test\\one_at_a_time.log";
     let status = Command::new("msiexec")
-        .args(&["/i", path, "/qn", "/l*v", log, "TARGETDIR=C:\\temp\\vel_msi_oati"])
+        .args(["/i", path, "/qn", "/l*v", log, "TARGETDIR=C:\\temp\\vel_msi_oati"])
         .status().unwrap();
     let code = status.code().unwrap_or(-1);
     println!("Exit code: {}", code);
@@ -142,7 +142,7 @@ fn main() {
         }
     } else {
         println!("SUCCESS!");
-        let _ = Command::new("msiexec").args(&["/x", path, "/qn"]).status();
+        let _ = Command::new("msiexec").args(["/x", path, "/qn"]).status();
     }
     let _ = std::fs::remove_dir_all("C:\\temp\\vel_msi_oati");
 }

@@ -88,7 +88,7 @@ fn main() {
         let _ = std::fs::remove_file(path);
         std::fs::write(path, &v4_data).unwrap();
         let output = std::process::Command::new("msiexec")
-            .args(&["/i", path, "/qn"])
+            .args(["/i", path, "/qn"])
             .output().unwrap();
         println!("V4 exit code: {}", output.status.code().unwrap_or(-1));
     }
@@ -132,7 +132,7 @@ fn main() {
         let _ = std::fs::remove_file(log_path);
         std::fs::write(path, &v3_data).unwrap();
         let output = std::process::Command::new("msiexec")
-            .args(&["/i", path, "/qn", "/l*v", log_path])
+            .args(["/i", path, "/qn", "/l*v", log_path])
             .output().unwrap();
         let ec = output.status.code().unwrap_or(-1);
         println!("V3 repackaged exit code: {}", ec);

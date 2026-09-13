@@ -53,14 +53,14 @@ fn main() {
 
     // Test with msiexec
     let status = std::process::Command::new("msiexec")
-        .args(&["/i", "C:\\temp\\reference_msi.msi", "/qn", "/norestart"])
+        .args(["/i", "C:\\temp\\reference_msi.msi", "/qn", "/norestart"])
         .status();
     let code = status.map(|s| s.code().unwrap_or(-1)).unwrap_or(-1);
     println!("msiexec exit code: {}", code);
 
     // Uninstall
     let status2 = std::process::Command::new("msiexec")
-        .args(&["/x", "{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}", "/qn", "/norestart"])
+        .args(["/x", "{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}", "/qn", "/norestart"])
         .status();
     if let Ok(s) = status2 {
         println!("uninstall exit code: {}", s.code().unwrap_or(-1));

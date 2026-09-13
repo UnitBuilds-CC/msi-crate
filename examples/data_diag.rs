@@ -96,7 +96,7 @@ fn main() {
                 total_name_len += len;
 
                 // Get the actual string from _StringData
-                let string_val = if let Some((_, sd)) = data_stream {
+                let string_val = if let Some((_, _sd)) = data_stream {
                     // We need to compute the offset in _StringData
                     // This is the cumulative length of all strings before this one
                     // For now, just show the length and refcount
@@ -134,8 +134,7 @@ fn main() {
                     let s = String::from_utf8_lossy(bytes);
                     let win1252: String = bytes.iter().map(|&b| {
                         if b < 0x80 { b as char }
-                        else if b <= 0xFF { char::from(b) }
-                        else { '?' }
+                        else { char::from(b) }
                     }).collect();
 
                     if id2 <= 60 {

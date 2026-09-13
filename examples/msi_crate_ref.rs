@@ -92,7 +92,7 @@ fn main() {
     // Test with msiexec
     let _ = std::fs::remove_dir_all("C:\\VelTest");
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", "msi_crate_ref.msi", "/qn", "/l*v", "msi_crate_ref.log"])
+        .args(["/i", "msi_crate_ref.msi", "/qn", "/l*v", "msi_crate_ref.log"])
         .output().unwrap();
     let exit = output.status.code().unwrap_or(-1);
     println!("msiexec exit: {}", exit);

@@ -4,7 +4,7 @@
 use velocity_msi::{MsiBuilder, Column, Value};
 use std::process::Command;
 
-fn build_msi_with_validation(include_validation: bool) -> Vec<u8> {
+fn build_msi_with_validation(_include_validation: bool) -> Vec<u8> {
     let mut b = MsiBuilder::new();
     b.set_title("Diag Tables");
     b.set_author("V");
@@ -45,12 +45,6 @@ fn build_msi_with_validation(include_validation: bool) -> Vec<u8> {
     b.build().unwrap()
 }
 
-/// Build MSI without _Validation table by manually constructing
-fn build_msi_no_validation() -> Vec<u8> {
-    // Use the normal builder but we'll check if _Validation is the issue
-    // by comparing stream sizes
-    build_msi_with_validation(true)
-}
 
 fn test_msi(data: &[u8], name: &str) -> i32 {
     let path = format!("diag_tables_{}.msi", name);
@@ -58,7 +52,7 @@ fn test_msi(data: &[u8], name: &str) -> i32 {
     std::fs::write(&path, data).unwrap();
     let _ = std::fs::remove_file(&log);
     let output = Command::new("msiexec")
-        .args(&["/i", &path, "/qn", "/norestart", "/lv", &log])
+        .args(["/i", &path, "/qn", "/norestart", "/lv", &log])
         .output()
         .expect("msiexec failed");
     let code = output.status.code().unwrap_or(-1);
@@ -181,10 +175,10 @@ fn dump_table_stream(data: &[u8], name: &str) {
                 if chunk.len() == entry_size {
                     let table_id = u16::from_le_bytes([chunk[0], chunk[1]]);
                     let col_num_raw = u16::from_le_bytes([chunk[2], chunk[3]]);
-                    let col_num = (col_num_raw as i16 ^ -0x8000i16 as i16) as u16;
+                    let col_num = (col_num_raw as i16 ^ -0x8000i16) as u16;
                     let name_id = u16::from_le_bytes([chunk[4], chunk[5]]);
                     let type_raw = u16::from_le_bytes([chunk[6], chunk[7]]);
-                    let type_val = type_raw as i16 ^ -0x8000i16 as i16;
+                    let type_val = type_raw as i16 ^ -0x8000i16;
                     println!("    Row {}: Table={}, ColNum={}, Name={}, Type=0x{:04X}", 
                         i, table_id, col_num, name_id, type_val as u16);
                 }
@@ -228,7 +222,7 @@ fn main() {
             println!("Entries: {}", num_entries);
             
             let mut offset = 0usize;
-            println!("{:>4}  {:>5}  {:>4}  {}", "ID", "Len", "Refs", "String");
+            println!("  ID   Len  Refs  String");
             for i in 0..num_entries {
                 let entry_off = 4 + i * entry_size;
                 let str_len = u16::from_le_bytes([pool_data[entry_off], pool_data[entry_off + 1]]) as usize;

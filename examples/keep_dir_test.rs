@@ -166,11 +166,11 @@ fn main() {
 
 fn test_msiexec(path: &str, product_code: &str) {
     let _ = std::process::Command::new("msiexec")
-        .args(&["/x", &format!("{{{}}}", product_code), "/qn"]).output();
+        .args(["/x", &format!("{{{}}}", product_code), "/qn"]).output();
     std::thread::sleep(std::time::Duration::from_secs(1));
 
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", path, "/qn", "/l*v", "C:\\temp\\keep_dir_test.log"])
+        .args(["/i", path, "/qn", "/l*v", "C:\\temp\\keep_dir_test.log"])
         .output().expect("msiexec failed");
     let code = output.status.code().unwrap_or(-1);
     println!("  Exit code: {} ({})", code, match code {

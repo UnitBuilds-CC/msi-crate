@@ -1,7 +1,6 @@
 /// Test: build MSI without _Validation table to see if it's causing 2705.
 /// Uses velocity-msi internals but skips _Validation.
 use velocity_msi::{MsiBuilder, Column, Value, encode_stream_name};
-use velocity_msi::ole;
 use std::process::Command;
 
 fn main() {
@@ -49,7 +48,7 @@ fn main() {
     println!("=== Test 1: Original (with _Validation) ===");
     let _ = std::fs::remove_file("noval_original.log");
     let output = Command::new("msiexec")
-        .args(&["/i", "noval_original.msi", "/qn", "/norestart", "/lv", "noval_original.log"])
+        .args(["/i", "noval_original.msi", "/qn", "/norestart", "/lv", "noval_original.log"])
         .output().expect("msiexec");
     println!("  exit: {}", output.status.code().unwrap_or(-1));
     
@@ -58,7 +57,7 @@ fn main() {
     {
         // Read the MSI with cfb
         let cursor = std::io::Cursor::new(&msi_data);
-        let mut comp = cfb::CompoundFile::open(cursor).expect("cfb open");
+        let comp = cfb::CompoundFile::open(cursor).expect("cfb open");
         
         // List all streams
         let entries: Vec<(String, bool)> = comp.walk()
@@ -108,7 +107,7 @@ fn main() {
         std::fs::write("noval_noexecseq.msi", &data).unwrap();
         let _ = std::fs::remove_file("noval_noexecseq.log");
         let output = Command::new("msiexec")
-            .args(&["/i", "noval_noexecseq.msi", "/qn", "/norestart", "/lv", "noval_noexecseq.log"])
+            .args(["/i", "noval_noexecseq.msi", "/qn", "/norestart", "/lv", "noval_noexecseq.log"])
             .output().expect("msiexec");
         println!("  exit: {}", output.status.code().unwrap_or(-1));
     }
@@ -145,7 +144,7 @@ fn main() {
         std::fs::write("noval_nodir.msi", &data).unwrap();
         let _ = std::fs::remove_file("noval_nodir.log");
         let output = Command::new("msiexec")
-            .args(&["/i", "noval_nodir.msi", "/qn", "/norestart", "/lv", "noval_nodir.log"])
+            .args(["/i", "noval_nodir.msi", "/qn", "/norestart", "/lv", "noval_nodir.log"])
             .output().expect("msiexec");
         println!("  exit: {}", output.status.code().unwrap_or(-1));
     }
@@ -211,7 +210,7 @@ fn main() {
         
         let _ = std::fs::remove_file("noval_msi_crate.log");
         let output = Command::new("msiexec")
-            .args(&["/i", "noval_msi_crate.msi", "/qn", "/norestart", "/lv", "noval_msi_crate.log"])
+            .args(["/i", "noval_msi_crate.msi", "/qn", "/norestart", "/lv", "noval_msi_crate.log"])
             .output().expect("msiexec");
         let code = output.status.code().unwrap_or(-1);
         println!("  msi crate MSI exit: {}", code);

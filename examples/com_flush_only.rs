@@ -15,7 +15,7 @@ fn main() {
     }
 
     let _ = std::process::Command::new("taskkill")
-        .args(&["/F", "/IM", "msiexec.exe"]).output();
+        .args(["/F", "/IM", "msiexec.exe"]).output();
     std::thread::sleep(std::time::Duration::from_secs(1));
 
     // Step 1: Open COM MSI with msi crate (it has no SummaryInfo, so this will fail)
@@ -51,7 +51,7 @@ fn main() {
     println!("\n--- msiexec test ---");
     let _ = std::fs::remove_file("C:\\temp\\com_flush_only.log");
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", out_path, "/qn", "/l*v", "C:\\temp\\com_flush_only.log"])
+        .args(["/i", out_path, "/qn", "/l*v", "C:\\temp\\com_flush_only.log"])
         .output().unwrap();
     let exit_code = output.status.code().unwrap_or(-1);
     println!("Exit code: {}", exit_code);

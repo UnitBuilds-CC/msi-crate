@@ -3,19 +3,18 @@
 /// V3 (512-byte sectors). This test repackages through cfb to fix the version.
 ///
 /// cargo run --example repackage_v3_test -p velocity-msi
-use std::io::{Cursor, Read};
+use std::io::{Cursor, Read, Write};
 
 fn main() {
     println!("=== REPACKAGE V4→V3 TEST ===\n");
 
     let _ = std::process::Command::new("taskkill")
-        .args(&["/F", "/IM", "msiexec.exe"]).output();
+        .args(["/F", "/IM", "msiexec.exe"]).output();
     std::thread::sleep(std::time::Duration::from_secs(1));
 
     // Step 1: Create MSI with msi crate (V4)
     let msi_v4 = {
-        let mut buf = Vec::new();
-        let cursor = Cursor::new(&mut buf);
+        let cursor = Cursor::new(Vec::new());
         let mut pkg = msi::Package::create(msi::PackageType::Installer, cursor).unwrap();
 
         // Create Property table
@@ -49,8 +48,8 @@ fn main() {
             si.set_word_count(2);
             si.set_creating_application("Velocity Installer");
         }
-        pkg.flush().unwrap();
-        buf
+        let v4_cursor = pkg.into_inner().unwrap();
+        v4_cursor.into_inner()
     };
     println!("msi crate V4: {} bytes", msi_v4.len());
     println!("  Version byte: {}", msi_v4[26]);  // Should be 4 for V4
@@ -109,7 +108,7 @@ fn main() {
     println!("\n--- Testing with msiexec ---");
     let _ = std::fs::remove_file("C:\\temp\\repackage_v3.log");
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", out_path, "/qn", "/l*v", "C:\\temp\\repackage_v3.log"])
+        .args(["/i", out_path, "/qn", "/l*v", "C:\\temp\\repackage_v3.log"])
         .output().unwrap();
     let exit_code = output.status.code().unwrap_or(-1);
     println!("Exit code: {}", exit_code);

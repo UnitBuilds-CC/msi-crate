@@ -62,7 +62,7 @@ fn main() {
     // Parse each entry and show the string it maps to
     let mut offset = 0usize;
     println!("=== String Pool Mapping ===");
-    println!("{:>4}  {:>6}  {:>4}  {}", "ID", "Length", "Refs", "String");
+    println!("{:>4}  {:>6}  {:>4}  String", "ID", "Length", "Refs");
     println!("----  ------  ----  ------");
     let mut strings_found: Vec<(u32, String)> = Vec::new();
 

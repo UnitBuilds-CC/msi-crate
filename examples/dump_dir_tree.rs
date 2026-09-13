@@ -61,7 +61,7 @@ fn main() {
     println!("First dir sector: {}", first_dir_sector);
     
     // Read FAT entries
-    let fat_base = HEADER_SIZE + first_dir_sector as usize * 0; // FAT is at sector 0
+    let _fat_base: usize = 0; // FAT is at sector 0
     println!("\n=== FAT entries ===");
     for i in 0..15 {
         let off = HEADER_SIZE + i * 4; // FAT at sector 0

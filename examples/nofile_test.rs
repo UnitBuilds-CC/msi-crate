@@ -83,7 +83,7 @@ fn main() {
 
     // Install
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", "nofile_test.msi", "/qn", "/l*v", "nofile_test_log.txt"])
+        .args(["/i", "nofile_test.msi", "/qn", "/l*v", "nofile_test_log.txt"])
         .output().unwrap();
     let code = output.status.code().unwrap_or(-1);
     println!("Install exit: {}", code);
@@ -103,7 +103,7 @@ fn main() {
     if code == 0 {
         println!("\n=== Uninstall ===");
         let output = std::process::Command::new("msiexec")
-            .args(&["/x", product_code, "/qn", "/l*v", "nofile_uninstall_log.txt"])
+            .args(["/x", product_code, "/qn", "/l*v", "nofile_uninstall_log.txt"])
             .output().unwrap();
         println!("Uninstall exit: {}", output.status.code().unwrap_or(-1));
     }

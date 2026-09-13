@@ -5,7 +5,7 @@ use std::process::Command;
 fn main() {
     println!("=== CODEPAGE 65001 TEST ===\n");
 
-    let _ = Command::new("taskkill").args(&["/F", "/IM", "msiexec.exe"]).output();
+    let _ = Command::new("taskkill").args(["/F", "/IM", "msiexec.exe"]).output();
     std::thread::sleep(std::time::Duration::from_secs(1));
 
     let mut b = velocity_msi::MsiBuilder::new();
@@ -53,7 +53,7 @@ fn main() {
     // Test with msiexec
     let log_path = "cp65001_test.log";
     let output = Command::new("msiexec")
-        .args(&["/i", path, "/qn", "/norestart", "/l*v", log_path])
+        .args(["/i", path, "/qn", "/norestart", "/l*v", log_path])
         .output()
         .expect("msiexec failed");
     let code = output.status.code().unwrap_or(-1);
@@ -78,6 +78,6 @@ fn main() {
     // Cleanup
     if code == 0 {
         let _ = Command::new("msiexec")
-            .args(&["/x", path, "/qn", "/norestart"]).output();
+            .args(["/x", path, "/qn", "/norestart"]).output();
     }
 }

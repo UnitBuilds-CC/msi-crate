@@ -5,7 +5,7 @@ use std::process::Command;
 fn main() {
     println!("=== Building velocity-msi output for comparison ===\n");
 
-    let _ = Command::new("taskkill").args(&["/F", "/IM", "msiexec.exe"]).output();
+    let _ = Command::new("taskkill").args(["/F", "/IM", "msiexec.exe"]).output();
     std::thread::sleep(std::time::Duration::from_secs(1));
 
     let mut b = velocity_msi::MsiBuilder::new();
@@ -66,7 +66,7 @@ fn main() {
     println!("\n--- Testing with msiexec ---");
     let log_path = format!("{}/velocity_comp.log", ws_root);
     let output = Command::new("msiexec")
-        .args(&["/i", &path, "/qn", "/norestart", "/l*v", &log_path])
+        .args(["/i", &path, "/qn", "/norestart", "/l*v", &log_path])
         .output()
         .expect("msiexec failed");
     let code = output.status.code().unwrap_or(-1);
@@ -83,7 +83,7 @@ fn main() {
         }
     } else {
         println!("SUCCESS!");
-        let _ = Command::new("msiexec").args(&["/x", &path, "/qn", "/norestart"]).output();
+        let _ = Command::new("msiexec").args(["/x", &path, "/qn", "/norestart"]).output();
     }
 
     // Dump stream info

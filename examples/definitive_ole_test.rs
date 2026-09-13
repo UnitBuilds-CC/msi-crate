@@ -206,7 +206,7 @@ fn test_msiexec(path: &str, label: &str) -> i32 {
 
     // Test with msiexec
     let output = Command::new("msiexec")
-        .args(&["/i", path, "/qn", "/norestart", "/l*v", &format!("{}.log", label.replace(' ', "_"))])
+        .args(["/i", path, "/qn", "/norestart", "/l*v", &format!("{}.log", label.replace(' ', "_"))])
         .output()
         .expect("Failed to run msiexec");
     let code = output.status.code().unwrap_or(-1);
@@ -215,7 +215,7 @@ fn test_msiexec(path: &str, label: &str) -> i32 {
     // Try to uninstall if install succeeded
     if code == 0 {
         let _ = Command::new("msiexec")
-            .args(&["/x", path, "/qn", "/norestart"])
+            .args(["/x", path, "/qn", "/norestart"])
             .output();
     }
 

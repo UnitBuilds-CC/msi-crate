@@ -15,7 +15,7 @@ fn main() {
     }
 
     let _ = std::process::Command::new("taskkill")
-        .args(&["/F", "/IM", "msiexec.exe"]).output();
+        .args(["/F", "/IM", "msiexec.exe"]).output();
     std::thread::sleep(std::time::Duration::from_secs(1));
 
     // Step 1: Read COM-created MSI
@@ -91,7 +91,7 @@ fn main() {
     println!("\n--- msiexec test ---");
     let _ = std::fs::remove_file("C:\\temp\\full_hybrid.log");
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", out_path, "/qn", "/l*v", "C:\\temp\\full_hybrid.log"])
+        .args(["/i", out_path, "/qn", "/l*v", "C:\\temp\\full_hybrid.log"])
         .output().unwrap();
     let exit_code = output.status.code().unwrap_or(-1);
     println!("Exit code: {}", exit_code);

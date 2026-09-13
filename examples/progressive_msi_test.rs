@@ -38,7 +38,7 @@ fn main() {
         test_msiexec(path);
 
         // Now read it back and examine the CLSID
-        let mut comp = cfb::CompoundFile::open(Cursor::new(&msi_data)).unwrap();
+        let comp = cfb::CompoundFile::open(Cursor::new(&msi_data)).unwrap();
         let root = comp.root_entry();
         println!("  Root CLSID: {}", root.clsid());
         println!("  Root name: {:?}", root.name());
@@ -150,7 +150,7 @@ fn test_step(name: &str, setup: impl Fn(&mut cfb::CompoundFile<Cursor<&mut Vec<u
 
 fn test_msiexec(path: &str) {
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", path, "/qn"])
+        .args(["/i", path, "/qn"])
         .output().unwrap();
     let ec = output.status.code().unwrap_or(-1);
     let desc = match ec {

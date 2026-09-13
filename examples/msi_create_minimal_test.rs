@@ -137,7 +137,7 @@ fn test_msi(label: &str, data: Vec<u8>) {
 
     // Test with msiexec
     let output = Command::new("msiexec")
-        .args(&["/i", &path, "/qn", "/norestart"])
+        .args(["/i", &path, "/qn", "/norestart"])
         .output()
         .expect("msiexec failed");
     let code = output.status.code().unwrap_or(-1);
@@ -145,7 +145,7 @@ fn test_msi(label: &str, data: Vec<u8>) {
 
     // Cleanup
     if code == 0 {
-        let _ = Command::new("msiexec").args(&["/x", &path, "/qn", "/norestart"]).output();
+        let _ = Command::new("msiexec").args(["/x", &path, "/qn", "/norestart"]).output();
     }
     println!();
 }

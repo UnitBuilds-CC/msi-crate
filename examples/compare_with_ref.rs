@@ -21,7 +21,7 @@ fn main() {
     println!("=== COMPARE VELOCITY-MSI WITH MSI CRATE REFERENCE ===\n");
 
     let _ = std::process::Command::new("taskkill")
-        .args(&["/F", "/IM", "msiexec.exe"]).output();
+        .args(["/F", "/IM", "msiexec.exe"]).output();
     std::thread::sleep(std::time::Duration::from_secs(2));
 
     // === Build reference MSI using the msi crate ===
@@ -202,11 +202,11 @@ fn main() {
     // Test reference with msiexec
     println!("\n--- Testing reference MSI with msiexec ---");
     let _ = std::process::Command::new("msiexec")
-        .args(&["/x", "{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}", "/qn"]).output();
+        .args(["/x", "{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}", "/qn"]).output();
     std::thread::sleep(std::time::Duration::from_secs(1));
 
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", ref_path, "/qn", "/l*v", "C:\\temp\\ref_msi.log"])
+        .args(["/i", ref_path, "/qn", "/l*v", "C:\\temp\\ref_msi.log"])
         .output().unwrap();
     let ref_exit = output.status.code().unwrap_or(-1);
     println!("Reference MSI exit code: {}", ref_exit);

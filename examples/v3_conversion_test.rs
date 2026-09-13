@@ -187,7 +187,7 @@ fn main() {
 
 fn test_msiexec(path: &str) {
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", path, "/qn"])
+        .args(["/i", path, "/qn"])
         .output().unwrap();
     let ec = output.status.code().unwrap_or(-1);
     let desc = match ec {

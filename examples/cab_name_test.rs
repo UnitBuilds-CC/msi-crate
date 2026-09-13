@@ -262,7 +262,7 @@ fn test_msi(msi: &[u8], name: &str) {
     
     let log_name = name.replace(".msi", "_log.txt");
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", name, "/qn", "/l*v", &log_name])
+        .args(["/i", name, "/qn", "/l*v", &log_name])
         .output().unwrap();
     println!("  Exit: {}", output.status.code().unwrap_or(-1));
     
@@ -280,7 +280,7 @@ fn test_msi(msi: &[u8], name: &str) {
 fn test_msi_file(name: &str) {
     let log_name = name.replace(".msi", "_log.txt");
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", name, "/qn", "/l*v", &log_name])
+        .args(["/i", name, "/qn", "/l*v", &log_name])
         .output().unwrap();
     println!("  Exit: {}", output.status.code().unwrap_or(-1));
     

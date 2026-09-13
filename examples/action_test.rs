@@ -49,7 +49,7 @@ fn test_msi(data: &[u8], name: &str) -> (i32, String) {
     std::fs::write(&path, data).unwrap();
     let _ = std::fs::remove_file(&log);
     let output = Command::new("msiexec")
-        .args(&["/i", &path, "/qn", "/norestart", "/lv", &log])
+        .args(["/i", &path, "/qn", "/norestart", "/lv", &log])
         .output()
         .expect("msiexec failed");
     let code = output.status.code().unwrap_or(-1);

@@ -1,6 +1,6 @@
 /// Test: Add Media/File tables to a working velocity-msi MSI using the msi crate
 /// cargo run --example hybrid_add_tables_test -p velocity-msi
-use std::io::{Cursor, Read, Write};
+use std::io::{Cursor, Write};
 use velocity_msi::{Column, MsiBuilder, Value};
 
 fn make_uuid() -> String {
@@ -132,11 +132,11 @@ fn main() {
     let _ = std::fs::remove_file(base_path);
     std::fs::write(base_path, &base_msi).unwrap();
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", base_path, "/qn"]).output().unwrap();
+        .args(["/i", base_path, "/qn"]).output().unwrap();
     let base_ec = output.status.code().unwrap_or(-1);
     println!("Base MSI exit code: {} (expect 0)", base_ec);
     let _ = std::process::Command::new("msiexec")
-        .args(&["/x", &pc, "/qn"]).output();
+        .args(["/x", &pc, "/qn"]).output();
 
     // Step 2: Open with msi crate and add File + Media tables + cabinet stream
     println!("\nAdding File/Media tables via msi crate...");
@@ -215,7 +215,7 @@ fn main() {
 
     println!("\nTesting modified MSI with msiexec...");
     let output = std::process::Command::new("msiexec")
-        .args(&["/i", mod_path, "/qn", "/l*v", log_path])
+        .args(["/i", mod_path, "/qn", "/l*v", log_path])
         .output().unwrap();
     let mod_ec = output.status.code().unwrap_or(-1);
     println!("Modified MSI exit code: {}", mod_ec);
@@ -233,7 +233,7 @@ fn main() {
             }
         }
         let _ = std::process::Command::new("msiexec")
-            .args(&["/x", &pc, "/qn"]).output();
+            .args(["/x", &pc, "/qn"]).output();
     } else {
         println!("FAILED! Exit code: {}", mod_ec);
         if let Ok(log) = std::fs::read_to_string(log_path) {
